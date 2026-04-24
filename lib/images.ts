@@ -10,13 +10,13 @@ const u = (
   { w = 1600, q = 80 }: { w?: number; q?: number } = {},
 ) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=${q}`;
 
-export const heroImage = u("1540206395-68808572332f", { w: 2000 });
+export const heroImage = u("1519681393784-d120267933ba", { w: 2000 });
 
 export const landingCollage = [
-  u("1540206395-68808572332f", { w: 1200 }), // Himalayan peaks
-  u("1544735716-392fe2489ffa", { w: 800 }), // Boudha stupa
-  u("1605649487212-47bdab064df7", { w: 800 }), // prayer flags
-  u("1506665531195-3566af2b4dfa", { w: 800 }), // mountains
+  u("1519681393784-d120267933ba", { w: 1200 }), // Himalayan peaks with Milky Way
+  u("1544735716-392fe2489ffa", { w: 800 }), // trail with mountain backdrop
+  u("1605649487212-47bdab064df7", { w: 800 }), // mountain ice scene
+  u("1506665531195-3566af2b4dfa", { w: 800 }), // mountain lake
 ];
 
 export interface FeaturedItem {
@@ -37,7 +37,7 @@ export const featuredDestinations: FeaturedItem[] = [
     region: "Solukhumbu",
     description:
       "Twelve days walking through Sherpa villages, pine forests, and the high moraine below the world's tallest peak.",
-    image: u("1540206395-68808572332f", { w: 1400 }),
+    image: u("1458668383970-8ddd3927deed", { w: 1400 }),
     tags: ["Trek", "High altitude", "Iconic"],
     rating: 4.9,
     days: "10–14 days",
@@ -59,7 +59,7 @@ export const featuredDestinations: FeaturedItem[] = [
     region: "Bagmati",
     description:
       "Seven UNESCO sites, Newari courtyards, hand-beaten metalwork — three capitals in a single valley.",
-    image: u("1605649487212-47bdab064df7", { w: 1400 }),
+    image: u("1537996194471-e657df975ab4", { w: 1400 }),
     tags: ["Culture", "Heritage", "City"],
     rating: 4.7,
     days: "3–5 days",
@@ -81,7 +81,7 @@ export const featuredDestinations: FeaturedItem[] = [
     region: "Terai",
     description:
       "Jeep safaris through tall grass for one-horned rhinos, wild elephants, and occasionally tigers.",
-    image: u("1534430480872-3498386e7856", { w: 1400 }),
+    image: u("1518495973542-4542c06a5843", { w: 1400 }),
     tags: ["Wildlife", "Jungle", "Family"],
     rating: 4.6,
     days: "2–4 days",
@@ -92,7 +92,7 @@ export const featuredDestinations: FeaturedItem[] = [
     region: "Mustang",
     description:
       "A restricted Tibetan plateau kingdom of walled cities, cave monasteries, and red cliff villages.",
-    image: u("1526772662000-3f88f10405ff", { w: 1400 }),
+    image: u("1571055107559-3e67626fa8be", { w: 1400 }),
     tags: ["Remote", "Cultural", "Restricted"],
     rating: 4.9,
     days: "10–14 days",
@@ -168,7 +168,7 @@ export const featuredStories: FeaturedStory[] = [
     title: "Alone on Thorong La",
     excerpt:
       "The wind at 5,416 m has a way of reminding you who's in charge — here's what eighteen hours above the clouds taught me about patience.",
-    image: u("1464822759023-fed622ff2c3b", { w: 1200 }),
+    image: u("1503220317375-aaad61436b1b", { w: 1200 }),
     author: "Priya Rai",
     readMinutes: 7,
   },
@@ -186,7 +186,7 @@ export const featuredStories: FeaturedStory[] = [
     title: "The cave monasteries of Mustang",
     excerpt:
       "Painted walls older than most countries, carved into cliffs nobody has mapped. Here's how we got in.",
-    image: u("1526772662000-3f88f10405ff", { w: 1200 }),
+    image: u("1551632811-561732d1e306", { w: 1200 }),
     author: "Anjali Gurung",
     readMinutes: 9,
   },
