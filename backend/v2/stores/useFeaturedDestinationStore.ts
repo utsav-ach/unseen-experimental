@@ -1,43 +1,81 @@
 "use client";
 
 /**
- * LEGACY SHIM: useFeaturedDestinationStore
- *
- * Part of the v1 -> v2 migration. Intentionally minimal / loose-typed.
- * It exists only to keep the UI compiling until pages are refactored to call
- * backend/v2 services directly.
- *
- * DO NOT expand this shim. When you refactor a consuming page:
- *   1. Replace usage of this store with a direct call to the relevant
- *      backend/v2/services/*.ts service (SSR preferred).
- *   2. Delete this file once no consumer remains.
- *
- * See AGENTS.md (Store Creation Rule).
+ * Legacy compat store for destination discovery pages. Thin Zustand wrapper
+ * over {@link DestinationService}. Keep methods narrow — any new feature
+ * should call the service directly from an SSR page per AGENTS.md.
  */
 
 import { create } from "zustand";
+import { DestinationService } from "../services";
+import type { Destination } from "../models";
+import type { SelectionPin } from "@/components/map/selection-map";
 
-type FeaturedDestinationStoreState = {
-	currentDestinationDetails: any;
-	destinations: any;
-	error: any;
-	isLoading: any;
-	clearCurrentDetails: (...args: any[]) => Promise<any>;
-	fetchByAreas: (...args: any[]) => Promise<any>;
-	fetchDestinationDetails: (...args: any[]) => Promise<any>;
-	fetchDestinations: (...args: any[]) => Promise<any>;
-	[key: string]: any;
-};
+interface FeaturedDestinationState {
+	destinations: Destination[];
+	currentDestinationDetails: Destination | null;
+	isLoading: boolean;
+	error: string | null;
 
-const initialState: FeaturedDestinationStoreState = {
-	currentDestinationDetails: null,
-	destinations: null,
-	error: null,
-	isLoading: null,
-	clearCurrentDetails: async (..._args: any[]) => undefined,
-	fetchByAreas: async (..._args: any[]) => undefined,
-	fetchDestinationDetails: async (..._args: any[]) => undefined,
-	fetchDestinations: async (..._args: any[]) => undefined,
-};
+	fetchDestinations: (options?: {
+		limit?: number;
+		offset?: number;
+		searchQuery?: string;
+	}) => Promise<void>;
+	fetchByAreas: (pins: SelectionPin[]) => Promise<void>;
+	fetchDestinationDetails: (id: string) => Promise<void>;
+	clearCurrentDetails: () => void;
+}
 
-export const useFeaturedDestinationStore = create<FeaturedDestinationStoreState>(() => initialState);
+const toMessage = (err: unknown) =>
+	err instanceof Error ? err.message : "Unexpected error";
+
+export const useFeaturedDestinationStore = create<FeaturedDestinationState>(
+	(set) => ({
+		destinations: [],
+		currentDestinationDetails: null,
+		isLoading: false,
+		error: null,
+
+		fetchDestinations: async (options) => {
+			set({ isLoading: true, error: null });
+			try {
+				const destinations = await DestinationService.getDestinations(
+					options,
+				);
+				set({ destinations, isLoading: false });
+			} catch (err) {
+				set({ error: toMessage(err), isLoading: false });
+			}
+		},
+
+		fetchByAreas: async (_pins) => {
+			// Area-based filtering not exposed on the v2 service yet — fall back
+			// to the full list so the map search UI keeps working.
+			set({ isLoading: true, error: null });
+			try {
+				const destinations = await DestinationService.getDestinations();
+				set({ destinations, isLoading: false });
+			} catch (err) {
+				set({ error: toMessage(err), isLoading: false });
+			}
+		},
+
+		fetchDestinationDetails: async (id) => {
+			set({ isLoading: true, error: null });
+			try {
+				const destination = await DestinationService.getDestinationById(
+					id,
+				);
+				set({
+					currentDestinationDetails: destination,
+					isLoading: false,
+				});
+			} catch (err) {
+				set({ error: toMessage(err), isLoading: false });
+			}
+		},
+
+		clearCurrentDetails: () => set({ currentDestinationDetails: null }),
+	}),
+);

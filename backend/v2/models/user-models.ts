@@ -14,13 +14,15 @@ import { f, fn } from "../schemas";
 export const BaseProfileSchema = z.object({
 	id: f.uuid(),
 
-	first_name: f.name(),
+	// Pre-onboarding rows have these null. Nullable here so SSR doesn't crash
+	// for newly-signed-up users before onboarding completes.
+	first_name: fn.name(),
 	middle_name: fn.name(),
-	last_name: f.name(),
+	last_name: fn.name(),
 
-	username: f.username(),
+	username: fn.username(),
 
-	phone_number: f.phone(),
+	phone_number: fn.phone(),
 	emergency_contact: fn.phone(),
 
 	avatar_url: fn.url(),
@@ -29,8 +31,8 @@ export const BaseProfileSchema = z.object({
 	is_guide: f.bool(),
 	is_guide_applicantion_pending: f.bool(),
 
-	home_location: f.gis(), // → { lat, lng }
-	home_location_name: f.name(),
+	home_location: fn.gis(), // → { lat, lng } | null
+	home_location_name: fn.name(),
 
 	created_at: f.datetime(),
 	updated_at: f.datetime(),

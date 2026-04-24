@@ -1,47 +1,97 @@
 "use client";
 
 /**
- * LEGACY SHIM: useGuideStore
- *
- * Part of the v1 -> v2 migration. Intentionally minimal / loose-typed.
- * It exists only to keep the UI compiling until pages are refactored to call
- * backend/v2 services directly.
- *
- * DO NOT expand this shim. When you refactor a consuming page:
- *   1. Replace usage of this store with a direct call to the relevant
- *      backend/v2/services/*.ts service (SSR preferred).
- *   2. Delete this file once no consumer remains.
- *
- * See AGENTS.md (Store Creation Rule).
+ * Legacy compat store for guide detail + guide inbox. Wraps
+ * {@link GuideService} and {@link BookingService}.
  */
 
 import { create } from "zustand";
+import { GuideService, BookingService } from "../services";
+import type { GuideBookingRequest, GuideInfo } from "../models";
 
-type GuideStoreState = {
-	currentGuide: any;
-	dashboardRequests: any;
-	error: any;
-	isLoading: any;
-	isLoadingDashboard: any;
-	selectedRequest: any;
-	fetchDashboardRequests: (...args: any[]) => Promise<any>;
-	fetchGuideDetail: (...args: any[]) => Promise<any>;
-	fetchRequestDetails: (...args: any[]) => Promise<any>;
-	respondToRequest: (...args: any[]) => Promise<any>;
-	[key: string]: any;
-};
+interface GuideStoreState {
+	currentGuide: GuideInfo | null;
+	dashboardRequests: GuideBookingRequest[];
+	selectedRequest: GuideBookingRequest | null;
+	isLoading: boolean;
+	isLoadingDashboard: boolean;
+	error: string | null;
 
-const initialState: GuideStoreState = {
+	fetchGuideDetail: (id: string) => Promise<void>;
+	fetchDashboardRequests: (guideId: string) => Promise<void>;
+	fetchRequestDetails: (requestId: string) => Promise<void>;
+	respondToRequest: (
+		requestId: string,
+		status: "approved" | "rejected",
+		payload: Record<string, unknown>,
+	) => Promise<boolean>;
+}
+
+const toMessage = (err: unknown) =>
+	err instanceof Error ? err.message : "Unexpected error";
+
+export const useGuideStore = create<GuideStoreState>((set, get) => ({
 	currentGuide: null,
-	dashboardRequests: null,
-	error: null,
-	isLoading: null,
-	isLoadingDashboard: null,
+	dashboardRequests: [],
 	selectedRequest: null,
-	fetchDashboardRequests: async (..._args: any[]) => undefined,
-	fetchGuideDetail: async (..._args: any[]) => undefined,
-	fetchRequestDetails: async (..._args: any[]) => undefined,
-	respondToRequest: async (..._args: any[]) => undefined,
-};
+	isLoading: false,
+	isLoadingDashboard: false,
+	error: null,
 
-export const useGuideStore = create<GuideStoreState>(() => initialState);
+	fetchGuideDetail: async (id) => {
+		set({ isLoading: true, error: null });
+		try {
+			const guide = await GuideService.getGuideById(id);
+			set({ currentGuide: guide, isLoading: false });
+		} catch (err) {
+			set({ error: toMessage(err), isLoading: false });
+		}
+	},
+
+	fetchDashboardRequests: async (guideId) => {
+		set({ isLoadingDashboard: true, error: null });
+		try {
+			const requests = await BookingService.getGuideBookingRequests({
+				guideId,
+			});
+			set({ dashboardRequests: requests, isLoadingDashboard: false });
+		} catch (err) {
+			set({ error: toMessage(err), isLoadingDashboard: false });
+		}
+	},
+
+	fetchRequestDetails: async (requestId) => {
+		set({ isLoading: true, error: null });
+		try {
+			const selected =
+				get().dashboardRequests.find((r) => r.id === requestId) ?? null;
+			set({ selectedRequest: selected, isLoading: false });
+		} catch (err) {
+			set({ error: toMessage(err), isLoading: false });
+		}
+	},
+
+	respondToRequest: async (requestId, status, payload) => {
+		set({ isLoading: true, error: null });
+		try {
+			if (status === "approved") {
+				await BookingService.submitGuideOffer({
+					p_proposal_id: requestId,
+					p_total_quoted_price: Number(payload.total_cost),
+					p_prepay_required: Number(payload.prepay_amount),
+					p_guide_remarks: String(payload.guide_remarks ?? ""),
+				});
+			} else {
+				await BookingService.rejectHiringProposal({
+					p_proposal_id: requestId,
+					p_guide_remarks: String(payload.guide_remarks ?? ""),
+				});
+			}
+			set({ isLoading: false });
+			return true;
+		} catch (err) {
+			set({ error: toMessage(err), isLoading: false });
+			return false;
+		}
+	},
+}));

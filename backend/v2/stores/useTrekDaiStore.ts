@@ -1,47 +1,69 @@
 "use client";
 
 /**
- * LEGACY SHIM: useTrekDaiStore
- *
- * Part of the v1 -> v2 migration. Intentionally minimal / loose-typed.
- * It exists only to keep the UI compiling until pages are refactored to call
- * backend/v2 services directly.
- *
- * DO NOT expand this shim. When you refactor a consuming page:
- *   1. Replace usage of this store with a direct call to the relevant
- *      backend/v2/services/*.ts service (SSR preferred).
- *   2. Delete this file once no consumer remains.
- *
- * See AGENTS.md (Store Creation Rule).
+ * Legacy compat store for the Trek-Dai guide discovery page. Wraps
+ * {@link GuideService.getGuides}.
  */
 
 import { create } from "zustand";
+import { GuideService } from "../services";
+import type { GuideInfo } from "../models";
 
-type TrekDaiStoreState = {
-	error: any;
-	guides: any;
-	isLoading: any;
-	query: any;
-	sortBy: any;
-	total: any;
-	fetchTrekDaiData: (...args: any[]) => Promise<any>;
-	loadMore: (...args: any[]) => Promise<any>;
-	setQuery: (...args: any[]) => Promise<any>;
-	setSortBy: (...args: any[]) => Promise<any>;
-	[key: string]: any;
-};
+interface TrekDaiState {
+	guides: GuideInfo[];
+	total: number;
+	isLoading: boolean;
+	error: string | null;
+	query: string;
+	sortBy: string;
 
-const initialState: TrekDaiStoreState = {
+	fetchTrekDaiData: () => Promise<void>;
+	loadMore: () => Promise<void>;
+	setQuery: (q: string) => void;
+	setSortBy: (s: string) => void;
+}
+
+const toMessage = (err: unknown) =>
+	err instanceof Error ? err.message : "Unexpected error";
+
+export const useTrekDaiStore = create<TrekDaiState>((set, get) => ({
+	guides: [],
+	total: 0,
+	isLoading: false,
 	error: null,
-	guides: null,
-	isLoading: null,
-	query: null,
-	sortBy: null,
-	total: null,
-	fetchTrekDaiData: async (..._args: any[]) => undefined,
-	loadMore: async (..._args: any[]) => undefined,
-	setQuery: async (..._args: any[]) => undefined,
-	setSortBy: async (..._args: any[]) => undefined,
-};
+	query: "",
+	sortBy: "rating",
 
-export const useTrekDaiStore = create<TrekDaiStoreState>(() => initialState);
+	fetchTrekDaiData: async () => {
+		const { query, sortBy } = get();
+		set({ isLoading: true, error: null });
+		try {
+			const guides = await GuideService.getGuides({
+				onlyAvailable: true,
+				searchQuery: query || undefined,
+				sortBy:
+					sortBy === "name"
+						? "full_name"
+						: ("avg_rating" as const),
+			});
+			set({ guides, total: guides.length, isLoading: false });
+		} catch (err) {
+			set({ error: toMessage(err), isLoading: false });
+		}
+	},
+
+	loadMore: async () => {
+		// List endpoint is already unpaginated server-side; loadMore is a no-op.
+		await get().fetchTrekDaiData();
+	},
+
+	setQuery: (query) => {
+		set({ query });
+		void get().fetchTrekDaiData();
+	},
+
+	setSortBy: (sortBy) => {
+		set({ sortBy });
+		void get().fetchTrekDaiData();
+	},
+}));

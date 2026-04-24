@@ -78,3 +78,23 @@ export async function callRpc<T>(
 
 	return parsed.data;
 }
+
+/**
+ * Tolerant variant of {@link callRpcArray}: on any failure (missing RPC, schema
+ * mismatch, network error) returns an empty array instead of throwing. Use this
+ * only for non-critical read paths (e.g. homepage "featured" strips) where a
+ * missing DB contract should degrade gracefully rather than crash SSR.
+ */
+export async function callRpcArraySafe<T>(
+	supabase: SupabaseClient,
+	fn: string,
+	schema: z.ZodType<T>,
+	params?: unknown,
+): Promise<T[]> {
+	try {
+		return await callRpcArray(supabase, fn, schema, params);
+	} catch (err) {
+		console.warn(`[callRpcArraySafe] ${fn} failed; returning []`, err);
+		return [];
+	}
+}

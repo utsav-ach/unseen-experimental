@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { f, fe, fn } from "../schemas";
+import { GuideServiceAreasInputSchema } from "./guide-models";
 
 /**
  * Applications module schemas
@@ -54,15 +55,6 @@ export type UnsuspensionRequest = z.infer<typeof UnsuspensionRequestSchema>;
  * RPC params/results
  */
 
-export const GuideServiceAreasInputSchema = z.array(
-	z.object({
-		lat: z.number().min(-90).max(90),
-		lng: z.number().min(-180).max(180),
-		radius_meters: z.number().positive().optional(),
-		location_name: z.string().trim().optional(),
-	}),
-);
-
 export const ApplyGuideApplicationParamsSchema = z.object({
 	p_nid_document_type: fe.nidType,
 	p_nid_number: f.name(),
@@ -79,14 +71,6 @@ export type ApplyGuideApplicationParams = z.infer<
 
 export const ApplyGuideApplicationResultSchema = f.uuid();
 
-export const ChangeGuideApplicationStatusParamsSchema = z.object({
-	p_application_id: f.uuid(),
-	p_status: fe.guideApplicationStatus,
-	p_admin_feedback: f.name(),
-});
-
-export type ChangeGuideApplicationStatusParams = z.infer<
-	typeof ChangeGuideApplicationStatusParamsSchema
->;
-
-export const ChangeGuideApplicationStatusResultSchema = GuideApplicationSchema;
+// ChangeGuideApplicationStatus* lives in admin-models.ts (admin-owned contract)
+// and is re-exported from the barrel index. Kept out of this module to avoid
+// duplicate export ambiguity.

@@ -7,7 +7,7 @@ import StatsSection from "@/components/home-page/StatsSection";
 import TopPackages from "@/components/home-page/TopPackages";
 import FeaturedStories from "@/components/home-page/FeaturedStories";
 import TestimonialsSlider from "@/components/home-page/TestimonialsSlider";
-import { callRpcArray, ssrClient } from "@/supabase/server";
+import { callRpcArraySafe, ssrClient } from "@/supabase/server";
 import {
 	MinimalDestinationSchema,
 	TopTrendingPackageSchema,
@@ -23,20 +23,23 @@ export const metadata: Metadata = {
 export default async function Home() {
 	const supabase = await ssrClient();
 
+	// These "trending" RPCs are optional surface content — if a deployment
+	// doesn't have them yet the homepage should still render. callRpcArraySafe
+	// returns [] on any error so SSR degrades gracefully.
 	const [destinations, packages, stories] = await Promise.all([
-		callRpcArray(
+		callRpcArraySafe(
 			supabase,
 			"get_top_trending_destinations",
 			MinimalDestinationSchema,
-			{ limit: 10 },
+			{ p_limit: 10 },
 		),
-		callRpcArray(
+		callRpcArraySafe(
 			supabase,
 			"get_top_trending_packages",
 			TopTrendingPackageSchema,
 			{ p_limit: 6 },
 		),
-		callRpcArray(
+		callRpcArraySafe(
 			supabase,
 			"get_top_trending_stories",
 			TopTrendingStorySchema,

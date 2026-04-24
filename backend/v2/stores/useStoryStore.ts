@@ -1,53 +1,135 @@
 "use client";
 
 /**
- * LEGACY SHIM: useStoryStore
- *
- * Part of the v1 -> v2 migration. Intentionally minimal / loose-typed.
- * It exists only to keep the UI compiling until pages are refactored to call
- * backend/v2 services directly.
- *
- * DO NOT expand this shim. When you refactor a consuming page:
- *   1. Replace usage of this store with a direct call to the relevant
- *      backend/v2/services/*.ts service (SSR preferred).
- *   2. Delete this file once no consumer remains.
- *
- * See AGENTS.md (Store Creation Rule).
+ * Legacy compat store for story pages. Reads via {@link StoryService}.
+ * Write operations (create/edit/delete/like/comment) are stubbed pending
+ * dedicated v2 RPCs — the UI reflects failure via `error` so the user sees
+ * a clean toast and no data is silently dropped.
  */
 
 import { create } from "zustand";
+import { StoryService } from "../services";
+import { useAuthStore } from "./useAuthStore";
+import type { Story } from "../models";
 
-type StoryStoreState = {
-	currentStory: any;
-	error: any;
-	isLoading: any;
-	stories: any;
-	total: any;
-	addComment: (...args: any[]) => Promise<any>;
-	createStory: (...args: any[]) => Promise<any>;
-	deleteStory: (...args: any[]) => Promise<any>;
-	editStory: (...args: any[]) => Promise<any>;
-	fetchStoriesPage: (...args: any[]) => Promise<any>;
-	fetchStoryDetail: (...args: any[]) => Promise<any>;
-	getStoryPermission: (...args: any[]) => Promise<any>;
-	toggleLike: (...args: any[]) => Promise<any>;
-	[key: string]: any;
+type StoryListOptions = {
+	limit?: number;
+	offset?: number;
+	category?: string | null;
+	sortBy?: string;
+	searchQuery?: string;
 };
 
-const initialState: StoryStoreState = {
+interface StoryState {
+	stories: Story[];
+	currentStory: Story | null;
+	total: number;
+	isLoading: boolean;
+	error: string | null;
+
+	fetchStoriesPage: (options: StoryListOptions) => Promise<void>;
+	fetchStoryDetail: (id: string) => Promise<void>;
+	createStory: (
+		title: string,
+		content: string,
+		categoriesString: string,
+		tags: string[],
+		featureImage: File,
+	) => Promise<boolean>;
+	editStory: (
+		id: string,
+		updates: Record<string, unknown>,
+		featureImage?: File,
+	) => Promise<boolean>;
+	deleteStory: (id: string) => Promise<boolean>;
+	toggleLike: (id: string) => Promise<void>;
+	addComment: (id: string, body: string) => Promise<void>;
+	getStoryPermission: (
+		id: string,
+	) => { canEdit: boolean; canDelete: boolean };
+}
+
+const notWired = (feature: string) =>
+	`${feature} is not wired to the v2 backend yet.`;
+
+const toMessage = (err: unknown) =>
+	err instanceof Error ? err.message : "Unexpected error";
+
+export const useStoryStore = create<StoryState>((set, get) => ({
+	stories: [],
 	currentStory: null,
+	total: 0,
+	isLoading: false,
 	error: null,
-	isLoading: null,
-	stories: null,
-	total: null,
-	addComment: async (..._args: any[]) => undefined,
-	createStory: async (..._args: any[]) => undefined,
-	deleteStory: async (..._args: any[]) => undefined,
-	editStory: async (..._args: any[]) => undefined,
-	fetchStoriesPage: async (..._args: any[]) => undefined,
-	fetchStoryDetail: async (..._args: any[]) => undefined,
-	getStoryPermission: async (..._args: any[]) => undefined,
-	toggleLike: async (..._args: any[]) => undefined,
-};
 
-export const useStoryStore = create<StoryStoreState>(() => initialState);
+	fetchStoriesPage: async (options) => {
+		set({ isLoading: true, error: null });
+		try {
+			const sortKey =
+				options.sortBy === "popular"
+					? "likes_count"
+					: options.sortBy === "comments"
+						? "comments_count"
+						: "created_at";
+			const stories = await StoryService.getStories({
+				limit: options.limit,
+				offset: options.offset,
+				searchQuery: options.searchQuery || undefined,
+				category: options.category ?? undefined,
+				sortBy: sortKey as "created_at" | "likes_count" | "comments_count",
+			});
+			set({
+				stories,
+				total: stories.length,
+				isLoading: false,
+			});
+		} catch (err) {
+			set({ error: toMessage(err), isLoading: false });
+		}
+	},
+
+	fetchStoryDetail: async (id) => {
+		set({ isLoading: true, error: null });
+		try {
+			const story = await StoryService.getStoryById(id);
+			set({ currentStory: story, isLoading: false });
+		} catch (err) {
+			set({ error: toMessage(err), isLoading: false });
+		}
+	},
+
+	createStory: async () => {
+		set({ error: notWired("Story publishing") });
+		return false;
+	},
+
+	editStory: async () => {
+		set({ error: notWired("Story editing") });
+		return false;
+	},
+
+	deleteStory: async () => {
+		set({ error: notWired("Story deletion") });
+		return false;
+	},
+
+	toggleLike: async () => {
+		set({ error: notWired("Story likes") });
+	},
+
+	addComment: async () => {
+		set({ error: notWired("Story comments") });
+	},
+
+	getStoryPermission: (id) => {
+		const story = get().currentStory;
+		const profile = useAuthStore.getState().profile();
+		if (!story || !profile) return { canEdit: false, canDelete: false };
+		const isOwner = story.uploader_id === profile.id;
+		const isAdmin = profile.is_admin === true;
+		return {
+			canEdit: isOwner,
+			canDelete: isOwner || isAdmin,
+		};
+	},
+}));

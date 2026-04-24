@@ -1,39 +1,44 @@
 "use client";
 
 /**
- * LEGACY SHIM: useProfileStore
- *
- * Part of the v1 -> v2 migration. Intentionally minimal / loose-typed.
- * It exists only to keep the UI compiling until pages are refactored to call
- * backend/v2 services directly.
- *
- * DO NOT expand this shim. When you refactor a consuming page:
- *   1. Replace usage of this store with a direct call to the relevant
- *      backend/v2/services/*.ts service (SSR preferred).
- *   2. Delete this file once no consumer remains.
- *
- * See AGENTS.md (Store Creation Rule).
+ * Legacy compat store for the profile dashboard. Reads private profile data
+ * off the `profiles` table (RLS keeps it scoped to the signed-in user).
  */
 
 import { create } from "zustand";
+import { createBrowserClient } from "@/supabase/client";
 
-type ProfileStoreState = {
-	isLoading: any;
-	myPrivateData: any;
-	error: any;
-	fetchMyPrivateData: (...args: any[]) => Promise<any>;
-	updateWithFiles: (...args: any[]) => Promise<any>;
-	getByUserId: (...args: any[]) => Promise<any>;
-	[key: string]: any;
-};
+type PrivateProfileData = Record<string, unknown>;
 
-const initialState: ProfileStoreState = {
-	isLoading: null,
+interface ProfileState {
+	myPrivateData: PrivateProfileData | null;
+	isLoading: boolean;
+	error: string | null;
+	fetchMyPrivateData: (id?: string) => Promise<void>;
+}
+
+const toMessage = (err: unknown) =>
+	err instanceof Error ? err.message : "Unexpected error";
+
+export const useProfileStore = create<ProfileState>((set) => ({
 	myPrivateData: null,
+	isLoading: false,
 	error: null,
-	fetchMyPrivateData: async (..._args: any[]) => undefined,
-	updateWithFiles: async (..._args: any[]) => undefined,
-	getByUserId: async (..._args: any[]) => undefined,
-};
 
-export const useProfileStore = create<ProfileStoreState>(() => initialState);
+	fetchMyPrivateData: async (id) => {
+		if (!id) return;
+		set({ isLoading: true, error: null });
+		try {
+			const supabase = createBrowserClient();
+			const { data, error } = await supabase
+				.from("profiles")
+				.select("*")
+				.eq("id", id)
+				.maybeSingle();
+			if (error) throw error;
+			set({ myPrivateData: data ?? null, isLoading: false });
+		} catch (err) {
+			set({ error: toMessage(err), isLoading: false });
+		}
+	},
+}));

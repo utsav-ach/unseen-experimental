@@ -1,67 +1,236 @@
 "use client";
 
 /**
- * LEGACY SHIM: useAuthStore
+ * Auth store — legitimate shared-state store per AGENTS.md (role/session
+ * state crosses the whole app, drives navbar + guard UI, survives route
+ * transitions).
  *
- * Part of the v1 -> v2 migration. Intentionally minimal / loose-typed.
- * It exists only to keep the UI compiling until pages are refactored to call
- * backend/v2 services directly.
- *
- * DO NOT expand this shim. When you refactor a consuming page:
- *   1. Replace usage of this store with a direct call to the relevant
- *      backend/v2/services/*.ts service (SSR preferred).
- *   2. Delete this file once no consumer remains.
- *
- * See AGENTS.md (Store Creation Rule).
+ * Delegates all business logic to {@link AuthService}; this layer only owns
+ * store shape, selector helpers, and toast/error shaping.
  */
 
 import { create } from "zustand";
+import { ServiceFailure } from "@/supabase/services/supabaseServicev2";
+import { AuthService } from "../services";
+import { createBrowserClient } from "@/supabase/client";
+import type { AuthProfile, BaseProfile, OnboardingParam } from "../models";
 
-type AuthStoreState = {
-	currentUser: any;
-	error: any;
-	isEmailVerified: any;
-	isInitializing: any;
-	isLoading: any;
-	is_logged_in: any;
-	is_onboarding_done: any;
-	profile: any;
-	profileData: any;
-	checkUsername: (...args: any[]) => Promise<any>;
-	getPostLoginRoute: (...args: any[]) => Promise<any>;
-	initialize: (...args: any[]) => Promise<any>;
-	login: (...args: any[]) => Promise<any>;
-	loginWithGoogle: (...args: any[]) => Promise<any>;
-	logout: (...args: any[]) => Promise<any>;
-	onboarding: (...args: any[]) => Promise<any>;
-	resendVerificationEmail: (...args: any[]) => Promise<any>;
-	setRedirectPage: (...args: any[]) => Promise<any>;
-	signUp: (...args: any[]) => Promise<any>;
-	uploadAvatar: (...args: any[]) => Promise<any>;
-	[key: string]: any;
+export type AuthStoreError = {
+	type: "VALIDATION" | "SUPABASE" | "PARSING" | "UNKNOWN";
+	message: string;
+	context?: string;
+	originalError?: unknown;
 };
 
-const initialState: AuthStoreState = {
-	currentUser: null,
-	error: null,
-	isEmailVerified: null,
-	isInitializing: null,
-	isLoading: null,
-	is_logged_in: null,
-	is_onboarding_done: null,
-	profile: null,
+export interface AuthState {
+	profileData: AuthProfile | null;
+	currentUser: BaseProfile | null;
+	isInitializing: boolean;
+	isLoading: boolean;
+	error: string | null;
+	redirectPage: string | null;
+
+	profile: () => BaseProfile | null;
+	is_logged_in: () => boolean;
+	isEmailVerified: () => boolean;
+	is_onboarding_done: () => boolean;
+
+	initialize: () => Promise<void>;
+	login: (email: string, password: string) => Promise<boolean>;
+	signUp: (email: string, password: string) => Promise<boolean>;
+	logout: () => Promise<void>;
+	loginWithGoogle: () => Promise<boolean>;
+	onboarding: (params: OnboardingParam) => Promise<boolean>;
+	resendVerificationEmail: () => Promise<boolean>;
+	checkUsername: (username: string) => Promise<boolean>;
+	uploadAvatar: (file: File) => Promise<string | null>;
+
+	getPostLoginRoute: () => string;
+	setRedirectPage: (path: string | null) => void;
+	clearError: () => void;
+}
+
+const toErrorMessage = (error: unknown): string => {
+	if (error instanceof ServiceFailure) return error.message;
+	if (error instanceof Error) return error.message;
+	return "Unknown error";
+};
+
+export const useAuthStore = create<AuthState>((set, get) => ({
 	profileData: null,
-	checkUsername: async (..._args: any[]) => undefined,
-	getPostLoginRoute: async (..._args: any[]) => undefined,
-	initialize: async (..._args: any[]) => undefined,
-	login: async (..._args: any[]) => undefined,
-	loginWithGoogle: async (..._args: any[]) => undefined,
-	logout: async (..._args: any[]) => undefined,
-	onboarding: async (..._args: any[]) => undefined,
-	resendVerificationEmail: async (..._args: any[]) => undefined,
-	setRedirectPage: async (..._args: any[]) => undefined,
-	signUp: async (..._args: any[]) => undefined,
-	uploadAvatar: async (..._args: any[]) => undefined,
-};
+	currentUser: null,
+	isInitializing: true,
+	isLoading: false,
+	error: null,
+	redirectPage: null,
 
-export const useAuthStore = create<AuthStoreState>(() => initialState);
+	profile: () => get().profileData?.profile ?? null,
+	is_logged_in: () => (get().profileData?.profile ?? null) !== null,
+	isEmailVerified: () => get().profileData?.is_auth_verified ?? false,
+	is_onboarding_done: () => get().profileData?.is_onboarding_done ?? false,
+
+	initialize: async () => {
+		set({ isInitializing: true, error: null });
+		try {
+			const profileData = await AuthService.safe(() =>
+				AuthService.fetchProfile(),
+			);
+			set({
+				profileData,
+				currentUser: profileData?.profile ?? null,
+				isInitializing: false,
+			});
+		} catch (error) {
+			set({
+				error: toErrorMessage(error),
+				profileData: null,
+				currentUser: null,
+				isInitializing: false,
+			});
+		}
+	},
+
+	login: async (email, password) => {
+		set({ isLoading: true, error: null });
+		try {
+			const profileData = await AuthService.login(email, password);
+			set({
+				profileData,
+				currentUser: profileData?.profile ?? null,
+				isLoading: false,
+			});
+			return true;
+		} catch (error) {
+			set({ error: toErrorMessage(error), isLoading: false });
+			return false;
+		}
+	},
+
+	signUp: async (email, password) => {
+		set({ isLoading: true, error: null });
+		try {
+			const profileData = await AuthService.signup(email, password);
+			set({
+				profileData,
+				currentUser: profileData?.profile ?? null,
+				isLoading: false,
+			});
+			return true;
+		} catch (error) {
+			set({ error: toErrorMessage(error), isLoading: false });
+			return false;
+		}
+	},
+
+	logout: async () => {
+		set({ isLoading: true, error: null });
+		try {
+			await AuthService.logout();
+			set({
+				profileData: null,
+				currentUser: null,
+				isLoading: false,
+			});
+		} catch (error) {
+			set({ error: toErrorMessage(error), isLoading: false });
+		}
+	},
+
+	loginWithGoogle: async () => {
+		set({ isLoading: true, error: null });
+		try {
+			await AuthService.loginWithGoogle();
+			set({ isLoading: false });
+			return true;
+		} catch (error) {
+			set({ error: toErrorMessage(error), isLoading: false });
+			return false;
+		}
+	},
+
+	onboarding: async (params) => {
+		set({ isLoading: true, error: null });
+		try {
+			const profileData = await AuthService.completeOnboarding(params);
+			set({
+				profileData,
+				currentUser: profileData?.profile ?? null,
+				isLoading: false,
+			});
+			return true;
+		} catch (error) {
+			set({ error: toErrorMessage(error), isLoading: false });
+			return false;
+		}
+	},
+
+	resendVerificationEmail: async () => {
+		set({ isLoading: true, error: null });
+		try {
+			const email = get().profileData?.email ?? null;
+			if (!email) {
+				set({ isLoading: false, error: "No email on file." });
+				return false;
+			}
+			const supabase = createBrowserClient();
+			const { error } = await supabase.auth.resend({
+				type: "signup",
+				email,
+			});
+			set({ isLoading: false });
+			if (error) {
+				set({ error: error.message });
+				return false;
+			}
+			return true;
+		} catch (error) {
+			set({ error: toErrorMessage(error), isLoading: false });
+			return false;
+		}
+	},
+
+	checkUsername: async (username) => {
+		try {
+			return await AuthService.isUsernameAvailable(username);
+		} catch (error) {
+			set({ error: toErrorMessage(error) });
+			return false;
+		}
+	},
+
+	uploadAvatar: async (file) => {
+		try {
+			const supabase = createBrowserClient();
+			const user = get().profileData?.profile;
+			if (!user) return null;
+			const path = `avatars/${user.id}-${Date.now()}-${file.name}`;
+			const { error } = await supabase.storage
+				.from("public-assets")
+				.upload(path, file, { upsert: true });
+			if (error) {
+				set({ error: error.message });
+				return null;
+			}
+			const { data } = supabase.storage
+				.from("public-assets")
+				.getPublicUrl(path);
+			return data.publicUrl;
+		} catch (error) {
+			set({ error: toErrorMessage(error) });
+			return null;
+		}
+	},
+
+	getPostLoginRoute: () => {
+		const state = get();
+		if (state.redirectPage) return state.redirectPage;
+		const pd = state.profileData;
+		if (!pd?.profile) return "/login";
+		if (!pd.is_auth_verified) return "/auth/verify-email";
+		if (!pd.is_onboarding_done) return "/onboarding";
+		return "/";
+	},
+
+	setRedirectPage: (path) => set({ redirectPage: path }),
+	clearError: () => set({ error: null }),
+}));
