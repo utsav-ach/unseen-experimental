@@ -9,18 +9,24 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="w-full max-w-sm space-y-6">
+    <div className="w-full space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Log in</h1>
-        <p className="text-sm text-muted-foreground">
-          Welcome back. Enter your email and password.
+        <p className="section-eyebrow">Welcome back</p>
+        <h1 className="mt-3 font-display text-4xl font-semibold leading-tight tracking-tight">
+          Log in to Unseen
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Enter your email and password to continue.
         </p>
       </div>
       <LoginForm />
       <p className="text-sm text-muted-foreground">
-        No account?{" "}
-        <Link href="/signup" className="underline underline-offset-2">
-          Sign up
+        Don&apos;t have an account?{" "}
+        <Link
+          href="/signup"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Create one
         </Link>
       </p>
     </div>

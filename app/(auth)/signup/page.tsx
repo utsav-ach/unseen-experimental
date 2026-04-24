@@ -9,17 +9,23 @@ export const metadata: Metadata = {
 
 export default function SignupPage() {
   return (
-    <div className="w-full max-w-sm space-y-6">
+    <div className="w-full space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Sign up</h1>
-        <p className="text-sm text-muted-foreground">
-          Create an account to book guides and share stories.
+        <p className="section-eyebrow">Start your journey</p>
+        <h1 className="mt-3 font-display text-4xl font-semibold leading-tight tracking-tight">
+          Create your account
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Book verified guides, plan trips, and save itineraries.
         </p>
       </div>
       <SignupForm />
       <p className="text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="underline underline-offset-2">
+        <Link
+          href="/login"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
           Log in
         </Link>
       </p>
