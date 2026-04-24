@@ -1,102 +1,503 @@
-# Architecture
+Here’s your **clean, structured `ARCHITECTURE.md`**—rewritten to remove contradictions, clarify SSR vs client roles, and make it extremely usable for both humans and AI agents.
 
-## Directory layout
+---
+
+# 📐 Unseen Nepal – Architecture Guide
+
+A clear, enforced architecture for building **Unseen Nepal** using **Next.js + Supabase** with SSR-first design and clean separation of concerns.
+
+---
+
+# 🧱 Tech Stack
+
+## Frontend
+
+* **Next.js (App Router, SSR-first)**
+* **Tailwind CSS**
+* **Shadcn UI**
+
+## Backend
+
+* **Supabase (PostgreSQL + Auth + Storage + RPC)**
+
+## State Management
+
+* **Zustand**
+
+---
+
+# Core Philosophy
+
+### 1. SSR First, Client Second
+
+* Public pages → **SSR (SEO priority)**
+* Interactive updates → **Client (Zustand + browser Supabase)**
+
+> SSR = first paint
+> Client = mutations + refresh
+
+---
+
+### 2. Clean Separation of Concerns
 
 ```
-app/
-  (public)/             SEO-first pages, no auth required
-    destinations/       List + [id] detail + /map
-    activities/         List + details/[id]
-    packages/           List + details/[id]
-    stories/            List + [id] + /add + edit/[id]
-    photos/             Gallery + [id]
-    trek-dai/           Curated treks
-  (protected)/          Server-auth-checked pages
-    bookings/           My bookings + checkout + details/[id]
-    guide/              Guide registration + requests/[id]
-    profile/            Profile + edit + requests
-    onboarding/
-  (auth)/               Login / signup / verify / callback
-  (admin)/admin/        Admin dashboards (dashboard, destinations, activities,
-                        packages, guides, bookings, users, stories, photos,
-                        settings)
-  dev/                  Scratch pages for iterating on components
+UI → Store → Service → Supabase
+```
 
-backend/v2/
-  models/               TypeScript types per module (7 modules)
-  schemas/              Zod field-types, enums, GIS types, case-mapper
-  services/             SupabaseServiceV2 base + one service per module
-  stores/               3 Zustand stores (auth, application, admin)
+| Layer    | Responsibility        |
+| -------- | --------------------- |
+| UI       | Rendering only        |
+| Store    | State + orchestration |
+| Service  | Backend communication |
+| Supabase | DB, Auth, Storage     |
 
-components/
-  ui/                   shadcn/ui primitives (button, card, input, …)
-  layouts/              navbar, footer
-  auth/                 auth-initializer
-  map/                  selection-map
+🚫 UI must NEVER:
 
-lib/
-  supabase/             browser client, server client, middleware helper
-  env.ts                typed env access + asserts
-  utils.ts              cn() helper
+* Call Supabase directly
+* Contain business logic
 
+---
+
+### 3. Minimal Overengineering
+
+* Avoid unnecessary abstraction
+* Use RPC only where needed
+* Prefer views for reads
+
+---
+
+# 🔄 Rendering Strategy (VERY IMPORTANT)
+
+## ✅ SSR (Server Components)
+
+Use for:
+
+* Public pages
+* SEO content
+* Initial data fetch
+
+Example:
+
+```ts
+const supabase = await createClient();
+const profile = await callRpc(supabase, "fetch_profile", Schema);
+```
+
+---
+
+## ✅ Client (Zustand + Browser Client)
+
+Use for:
+
+* Login / Signup
+* Refresh button
+* Mutations
+* Real-time updates
+
+---
+
+## ✅ Hybrid Pattern (Recommended)
+
+**Flow:**
+
+1. Fetch data in SSR
+2. Hydrate Zustand store
+3. Let client handle future updates
+
+```tsx
+<AuthInitializer profile={profile}>
+  <MainLayout>{children}</MainLayout>
+</AuthInitializer>
+```
+
+---
+
+# 🧠 State Management (Zustand)
+
+## Rules
+
+* One store per module:
+
+  * `authStore`
+  * `guideStore`
+  * `bookingStore`
+
+* Stores:
+
+  * Call services
+  * Manage loading/error state
+  * Expose simple methods
+
+---
+
+## Store Responsibilities
+
+✅ Allowed:
+
+* Call services
+* Manage state
+* Coordinate flows
+
+❌ Not allowed:
+
+* Direct Supabase calls (except controlled browser client use)
+
+---
+
+# 🔌 Services Layer
+
+Each module has its own service:
+
+```
+backend/services/
+  ├── authService.ts
+  ├── guideService.ts
+  ├── bookingService.ts
+```
+
+## Responsibilities
+
+* Wrap Supabase queries
+* Handle errors
+* Keep UI clean
+
+---
+
+# 🗄️ Database Strategy
+
+## 🟢 Reads → Views (Preferred)
+
+Use views for:
+
+* Listing data
+* Filtering
+* Public queries
+
+Example:
+
+```sql
+CREATE VIEW public.available_guides AS
+SELECT ...
+WHERE is_available = true;
+```
+
+👉 Then:
+
+```ts
+supabase.from("available_guides").select("*")
+```
+
+---
+
+## 🔴 Writes → RPC ONLY (Strict Rule)
+
+> 🚨 Golden Rule: NO direct inserts from frontend
+
+All writes must go through RPC:
+
+### Examples:
+
+* onboarding
+* apply guide
+* review guide
+* negotiation flow
+
+---
+
+## Why RPC for Writes?
+
+* Centralized validation
+* Security
+* Business logic enforcement
+* Prevents frontend bypass
+
+---
+
+# ⚙️ RPC Design Rules
+
+### ✅ Good RPC
+
+* Validates inputs
+* Checks permissions
+* Throws meaningful errors
+
+### ❌ Bad RPC
+
+* Blind inserts
+* No validation
+* No auth checks
+
+---
+
+## Example Utility Function
+
+```sql
+CREATE FUNCTION public.require_admin()
+RETURNS void AS $$
+BEGIN
+  IF NOT is_current_user_admin() THEN
+    RAISE EXCEPTION 'Admin required';
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+---
+
+## DRY RPC
+
+* Reuse functions
+* Call RPC inside RPC
+* Avoid duplication
+
+---
+
+# 🔐 RLS (Row Level Security)
+
+* ALWAYS enabled
+* Applies to:
+
+  * Tables
+  * Views
+
+### Rules:
+
+* Admin always has access
+* Never rely only on frontend validation
+
+---
+
+# 📦 SQL Structure
+
+```
 sql/
-  schema/               Table definitions
-  views/                Read-optimized views
-  rpc/                  Business logic functions (writes go here)
-  rls/                  Row-level security policies
-  triggers/             updated_at + counters
-  admin/                Admin-isolated schema/views/rpc/rls
-  sql-gen.dart          Preferred bundler
-  sql-gen.sh            Bash fallback
-  full-*.sql            GENERATED — do not edit
+├── schema/
+├── rls/
+├── rpc/
+├── triggers/
+├── sql-gen.dart
 ```
 
-## Request lifecycle
+### Important:
+There are 2 files for sql-gen, one is dart and other is sh file,
+- prefer dart over sh file
 
-1. A request hits `middleware.ts`, which refreshes the Supabase auth cookie
-   via `lib/supabase/middleware.ts`.
-2. A route-group layout (`(public)`, `(protected)`, `(auth)`, `(admin)`)
-   renders. Protected + admin layouts call the auth service server-side to
-   guard access.
-3. Server Components call services directly. Services call Supabase through
-   views for reads and RPCs for writes, validating responses with Zod.
-4. Client Components hydrate from server-rendered HTML and from Zustand
-   stores (auth in particular, via `AuthInitializer`).
+sometimes extra of following files are created by the sql-gen, 
+```txt
 
-## Data strategy
+├── full-copy-paste.sql
+├── full-rls.sql
+├── full-rpc.sql
+├── full-schema.sql
+├── full-triggers.sql
+├── full-views.sql
+├── reset.sql
 
-Writes are **only** performed through Postgres RPC functions marked `security
-definer`. The service role key is never exposed to the browser. The public
-anon key is exposed, so RLS is enforced for every table that contains user or
-admin data.
+```
 
-Views stand between tables and the client so that shape changes don't break
-the frontend contracts. `destinations`, `guide_info`, `stories_info`,
-`guide_bookings_info`, etc. embed joined fields (like author/user info) so
-that pages can select `*` and render.
 
-## Auth
+* ❌ Do NOT trust `full-*.sql` These are auto generated and can contain old unsynced code.
+* ✅ Alwats Use modular files to change
+* Run the sql-gen if the editing to modular file is completed.
 
-Supabase Auth with email/password. Email verification is required. The
-`/auth/callback` route exchanges the OAuth/magic-link code for a session.
+---
 
-The `auth-store` is hydrated by `AuthInitializer` (mounted once in the
-protected layout) and kept in sync through `supabase.auth.onAuthStateChange`.
+# 🧾 Zod Schema Sync
 
-## Admin
+All schemas in:
 
-Admin status is a boolean on `profiles.is_admin`. The `(admin)` layout
-resolves the profile server-side and calls `notFound()` for non-admins,
-which returns a real 404 rather than leaking the existence of admin routes.
+```
+backend/schemas.ts
+```
 
-## Extending
+### Rule:
 
-1. Add a table in `sql/schema/`.
-2. Add a view in `sql/views/` if it's read-heavy.
-3. Add write RPCs in `sql/rpc/`.
-4. Regenerate `full-*.sql`.
-5. Add a Zod model in `backend/v2/models/`.
-6. Add a service method in `backend/v2/services/`.
-7. Consume from a Server Component.
+* Every RPC → must have matching Zod schema
+* Keep backend + frontend in sync
 
-Resist adding stores. If you think you need one, re-read AGENTS.md first.
+---
+
+# 🎨 UI Rules
+
+## Design Philosophy
+* Minimal
+* Clean
+* Readable
+* Not flashy
+---
+
+## Styling Rules
+Dont hardcode colors
+✅ Use `bg-background` 
+❌ Avoid: `bg-white`
+---
+
+## Cards
+
+* Fully clickable
+* Image at top
+* No padding around image
+* Square-ish layout
+* Minimal content
+
+---
+
+## Text Rules
+
+❌ Avoid:
+* Fancy wording
+* Over-professional tone
+
+✅ Use:
+* Simple English
+* Clear meaning
+
+---
+
+# 📱 Component Structure
+
+```
+components/
+├── ui/                # Shadcn components
+├── destinations/
+├── onboarding/
+```
+
+### Rule:
+
+* Don’t clutter root
+* Group by module
+
+---
+
+# 📈 SEO Rules (HIGH PRIORITY)
+
+* Every page MUST have metadata
+* Use semantic HTML:
+
+  * `<main>`
+  * `<section>`
+  * `<article>`
+
+---
+
+## Metadata Rule
+
+❌ Don’t put metadata in client components
+✅ Use layout.tsx if needed
+
+---
+
+# 🔒 Protected Routes
+
+Use `Guard` component:
+
+```
+components/auth/auth-initializer.tsx
+```
+
+### Use only when needed:
+
+* Profile page
+* Admin page
+* Story creation
+
+---
+
+# 🖼️ Media Handling
+
+* Separate bucket per module:
+
+  * profile
+  * stories
+  * destinations
+
+### Rules:
+
+* Public by default
+* `vault` bucket = private (sensitive files)
+
+---
+
+# ⚠️ Error Handling
+
+## Rules
+
+* Always show errors in UI
+* Use:
+
+  * `toast.error`
+  * inline error messages
+
+---
+
+## UX Rule
+
+User must ALWAYS know:
+
+* What failed
+* Why it failed
+
+---
+
+# 🚫 Anti-Patterns (STRICTLY FORBIDDEN)
+
+* UI calling Supabase directly
+* Direct DB insert from frontend
+* Business logic inside UI
+* Rewriting existing components unnecessarily
+* Hardcoded colors
+* Ignoring SSR for public pages
+
+---
+
+# 🧪 Dev Rules
+
+## Package Manager
+
+* ✅ Use `bun`
+* ❌ Never use npm/npx
+
+---
+
+## Type Safety
+
+* No `any`
+* Must pass TypeScript check
+
+---
+
+## DRY Principle
+
+* Reuse everything
+* Avoid duplication
+
+---
+
+# 🔄 Development Workflow
+
+## When adding a feature:
+
+1. Design DB (table/view/RPC)
+2. Add Zod schema
+3. Create service method
+4. Add store method
+5. Use in UI
+
+---
+
+# 🧠 Key Takeaways
+
+* **SSR for first paint**
+* **Client for interaction**
+* **Views for reads**
+* **RPC for writes**
+* **Zustand for state**
+* **Services for abstraction**
+
+---
+
+Good call—this is exactly the kind of section that *breaks projects later* if it's vague. I’ve rewritten it into a **strict, non-ambiguous rulebook** with **DO / DON’T / WHY / EXAMPLES** so neither a human nor an AI can misinterpret it.
+
+---
+

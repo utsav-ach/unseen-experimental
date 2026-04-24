@@ -1,16 +1,22 @@
-import { Navbar } from "@/components/layouts/navbar";
-import { Footer } from "@/components/layouts/footer";
+import Footer from "@/components/home-page/Footer";
+import { Navbar } from "@/components/navbar";
+import { cn } from "@/lib/utils";
 
-export default function PublicLayout({
-  children,
+export default function PublicRouteGroupLayout({
+	children,
 }: {
-  children: React.ReactNode;
+	children: React.ReactNode;
 }) {
-  return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-      <main className="flex-1">{children}</main>
-      <Footer />
-    </div>
-  );
+	return (
+		<>
+			<Navbar />
+			<main className={cn("flex-1 transition-all duration-500 pt-20")}>
+				<div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+					{children}
+				</div>
+			</main>
+
+			<Footer />
+		</>
+	);
 }

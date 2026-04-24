@@ -1,51 +1,71 @@
 import type { Metadata } from "next";
-import { Inter, Fraunces } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthInitializer } from "@/components/auth/auth-initializer";
+import { callRpc, ssrClient } from "@/supabase/server";
+import {
+	AuthProfile,
+	AuthProfileSchema,
+} from "@/backend/v2/models/user-models";
 
-const sans = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
+const inter = Inter({
+	variable: "--font-primary",
+	subsets: ["latin"],
 });
 
-const display = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-display",
-  display: "swap",
-  weight: ["400", "500", "600", "700"],
+const playfair = Playfair_Display({
+	variable: "--font-display",
+	subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: {
-    default: "Unseen Nepal — Local guides for extraordinary journeys",
-    template: "%s · Unseen Nepal",
-  },
-  description:
-    "Discover Nepal with trusted local guides. Browse featured destinations, negotiate custom trips, or book curated packages for treks, culture, and adventure.",
-  metadataBase: new URL("https://unseen.np"),
-  openGraph: {
-    type: "website",
-    siteName: "Unseen Nepal",
-    title: "Unseen Nepal — Local guides for extraordinary journeys",
-    description:
-      "Discover Nepal with trusted local guides. Treks, culture, adventure — crafted by people who grew up in these valleys.",
-  },
+	title: "Unseen Nepal | Authentic Travel Experiences",
+	description:
+		"Discover the hidden gems of Nepal with authentic stories, photography, and guide services directed by Trek Dai.",
+	keywords: [
+		"Nepal",
+		"Travel",
+		"Trekking",
+		"Adventure",
+		"Photography",
+		"Himalayas",
+	],
+	authors: [{ name: "Trek Dai" }],
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html
-      lang="en"
-      className={`${sans.variable} ${display.variable}`}
-      suppressHydrationWarning
-    >
-      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
-        {children}
-      </body>
-    </html>
-  );
+export default async function RootLayout({
+	children,
+}: Readonly<{
+	children: React.ReactNode;
+}>) {
+	const supabase = await ssrClient();
+	const profile: AuthProfile = await callRpc<AuthProfile>(
+		supabase,
+		"fetch_profile",
+		AuthProfileSchema,
+	);
+
+	return (
+		<html
+			lang="en"
+			suppressHydrationWarning
+			className={`${inter.variable} ${playfair.variable} scroll-smooth`}>
+			<body
+				suppressHydrationWarning
+				className="bg-background dark:bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary transition-all duration-500">
+				<ThemeProvider
+					attribute="class"
+					defaultTheme="system"
+					enableSystem
+					disableTransitionOnChange>
+					<TooltipProvider delayDuration={0}>
+						<AuthInitializer profileData={profile} />
+						{children}
+					</TooltipProvider>
+				</ThemeProvider>
+			</body>
+		</html>
+	);
 }

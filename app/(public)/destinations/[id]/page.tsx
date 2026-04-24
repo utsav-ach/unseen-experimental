@@ -1,190 +1,345 @@
-import type { Metadata } from "next";
+"use client";
+
+import React, { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ArrowLeft, Star, MapPin } from "lucide-react";
-import { destinationService } from "@/backend/v2/services/destination-services";
-import { env } from "@/lib/env";
-import { featuredDestinations } from "@/lib/images";
+import {
+	ArrowLeft,
+	Loader2,
+	MapPin,
+	Star,
+	Users,
+	Package,
+	Sparkles,
+	BookOpen,
+	MessageSquare,
+} from "lucide-react";
+import { useFeaturedDestinationStore } from "@/backend/v2/stores/useFeaturedDestinationStore";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
-interface Props {
-  params: { id: string };
-}
+export default function DestinationDetailsPage({
+	params,
+}: {
+	params: Promise<{ id: string }>;
+}) {
+	const { id } = React.use(params);
+	const {
+		currentDestinationDetails,
+		isLoading,
+		fetchDestinationDetails,
+		clearCurrentDetails,
+	} = useFeaturedDestinationStore();
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const fallback = featuredDestinations.find((d) => d.id === params.id);
-  if (fallback) {
-    return { title: fallback.name, description: fallback.description };
-  }
-  if (!env.BACKEND_URL) return { title: "Destination" };
-  const d = await destinationService.getDestination(params.id).catch(() => null);
-  if (!d) return { title: "Destination" };
-  return { title: d.name, description: d.description };
-}
+	useEffect(() => {
+		fetchDestinationDetails(id);
+		return () => clearCurrentDetails();
+	}, [id, fetchDestinationDetails, clearCurrentDetails]);
 
-export default async function DestinationDetailPage({ params }: Props) {
-  const fallback = featuredDestinations.find((d) => d.id === params.id);
+	if (isLoading && !currentDestinationDetails) {
+		return (
+			<div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 bg-background">
+				<Loader2 className="h-8 w-8 animate-spin text-primary" />
+				<p className="text-sm text-muted-foreground">
+					Loading destination details...
+				</p>
+			</div>
+		);
+	}
 
-  const destination = env.BACKEND_URL
-    ? await destinationService
-        .getDestination(params.id)
-        .catch(() => null)
-    : null;
+	if (!currentDestinationDetails) {
+		return (
+			<div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 bg-background px-4 text-center">
+				<h1 className="text-xl font-semibold text-foreground">
+					Destination not found
+				</h1>
+				<p className="max-w-md text-sm text-muted-foreground">
+					This destination is unavailable right now.
+				</p>
+				<Link href="/destinations">
+					<Button variant="outline">
+						<ArrowLeft className="mr-2 h-4 w-4" />
+						Back to destinations
+					</Button>
+				</Link>
+			</div>
+		);
+	}
 
-  const data =
-    destination ??
-    (fallback
-      ? {
-          id: fallback.id,
-          name: fallback.name,
-          description: fallback.description,
-          feature_image: fallback.image,
-          tags: fallback.tags,
-          avg_rating: fallback.rating,
-          coordinates: null,
-          additional_images: [] as string[],
-        }
-      : null);
+	const { destination, guides, packages, activities, stories, reviews } =
+		currentDestinationDetails;
+	const mainImage =
+		destination.feature_image ||
+		destination.additional_images?.[0] ||
+		"/placeholder-destination.jpg";
 
-  if (!data) notFound();
+	return (
+		<main className="min-h-screen bg-background pb-16">
+			<section className="relative h-[45vh] min-h-75 w-full overflow-hidden">
+				<Image
+					src={mainImage}
+					alt={destination.name}
+					fill
+					className="object-cover"
+					priority
+				/>
+				<div className="absolute inset-0 bg-linear-to-t from-background via-background/40 to-transparent" />
+				<div className="absolute left-4 top-4 z-20 md:left-8 md:top-8">
+					<Link href="/destinations">
+						<Button
+							variant="secondary"
+							className="bg-background/80 backdrop-blur">
+							<ArrowLeft className="mr-2 h-4 w-4" />
+							Back
+						</Button>
+					</Link>
+				</div>
 
-  const reviews =
-    destination && env.BACKEND_URL
-      ? await destinationService.listReviews(data.id).catch(() => [])
-      : [];
+				<div className="absolute bottom-6 left-0 right-0 z-20 px-4 md:px-8">
+					<div className="mx-auto w-full max-w-7xl">
+						<div className="inline-flex items-center gap-2 rounded-full bg-background/85 px-3 py-1.5 text-xs text-foreground shadow-sm backdrop-blur">
+							<Star className="h-3.5 w-3.5 fill-primary text-primary" />
+							{destination.avg_rating
+								? destination.avg_rating.toFixed(1)
+								: "New"}
+						</div>
+						<h1 className="mt-3 text-3xl font-semibold text-white md:text-5xl">
+							{destination.name}
+						</h1>
+						<p className="mt-2 max-w-2xl text-sm text-white/90 md:text-base">
+							{destination.description ||
+								"Explore this destination with verified guides and curated travel plans."}
+						</p>
+					</div>
+				</div>
+			</section>
 
-  return (
-    <article>
-      <div className="relative h-[60vh] min-h-[420px] w-full overflow-hidden">
-        <Image
-          src={data.feature_image ?? featuredDestinations[0].image}
-          alt={data.name}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/70" />
-        <div className="container-wide absolute inset-x-0 bottom-0 pb-12 text-white">
-          <Link
-            href="/destinations"
-            className="inline-flex items-center gap-2 text-sm text-white/80 hover:text-white"
-          >
-            <ArrowLeft className="size-4" /> Back to destinations
-          </Link>
-          <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="font-display text-5xl font-semibold leading-tight tracking-tight text-balance sm:text-6xl">
-                {data.name}
-              </h1>
-              <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-white/85">
-                <span className="inline-flex items-center gap-1">
-                  <Star className="size-4 fill-white text-white" />
-                  {Number(data.avg_rating ?? 0).toFixed(2)}
-                </span>
-                {data.coordinates && (
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="size-4" />
-                    {data.coordinates.latitude.toFixed(3)},{" "}
-                    {data.coordinates.longitude.toFixed(3)}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {data.tags.slice(0, 4).map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur"
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+			<section className="mx-auto mt-8 w-full max-w-7xl space-y-8 px-4 md:px-8">
+				<div className="flex flex-wrap items-center gap-2 text-xs">
+					{(destination.tags ?? []).slice(0, 6).map((tag) => (
+						<Badge key={tag} variant="secondary">
+							{tag}
+						</Badge>
+					))}
+					<Badge variant="outline" className="gap-1">
+						<MapPin className="h-3 w-3" /> {destination.radius} km
+						area
+					</Badge>
+				</div>
 
-      <div className="container-wide grid gap-12 py-16 lg:grid-cols-[2fr_1fr]">
-        <div>
-          <p className="section-eyebrow">About this destination</p>
-          <p className="mt-4 prose-legible">{data.description}</p>
-          {data.additional_images.length > 0 && (
-            <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {data.additional_images.slice(0, 6).map((img) => (
-                <div
-                  key={img}
-                  className="relative aspect-square overflow-hidden rounded-[calc(var(--radius)-2px)]"
-                >
-                  <Image
-                    src={img}
-                    alt=""
-                    fill
-                    sizes="(min-width: 640px) 33vw, 50vw"
-                    className="object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+				<div className="grid gap-4 md:grid-cols-3">
+					<Card className="p-4">
+						<p className="text-xs text-muted-foreground">
+							Guides available
+						</p>
+						<p className="mt-1 text-2xl font-semibold">
+							{guides.length}
+						</p>
+					</Card>
+					<Card className="p-4">
+						<p className="text-xs text-muted-foreground">
+							Related packages
+						</p>
+						<p className="mt-1 text-2xl font-semibold">
+							{packages.length}
+						</p>
+					</Card>
+					<Card className="p-4">
+						<p className="text-xs text-muted-foreground">
+							Community reviews
+						</p>
+						<p className="mt-1 text-2xl font-semibold">
+							{reviews.length}
+						</p>
+					</Card>
+				</div>
 
-        <aside className="space-y-4">
-          <div className="card-elevated p-6">
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
-              Plan your trip
-            </p>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Tell us dates and group size, and we&apos;ll match you with
-              guides who service this destination.
-            </p>
-            <Link
-              href={`/destinations/map?target=${data.id}`}
-              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              Find guides here
-            </Link>
-            <Link
-              href="/packages"
-              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-secondary"
-            >
-              See ready-to-book packages
-            </Link>
-          </div>
-        </aside>
-      </div>
+				<section>
+					<h2 className="mb-3 text-lg font-semibold">Activities</h2>
+					{activities.length ? (
+						<div className="flex flex-wrap gap-2">
+							{activities.map((activity) => (
+								<Badge
+									key={activity.id}
+									variant="outline"
+									className="gap-1">
+									<Sparkles className="h-3 w-3" />{" "}
+									{activity.name}
+								</Badge>
+							))}
+						</div>
+					) : (
+						<p className="text-sm text-muted-foreground">
+							No activities configured for this destination yet.
+						</p>
+					)}
+				</section>
 
-      <section className="border-t border-border/60 bg-secondary/30">
-        <div className="container-wide py-16">
-          <h2 className="font-display text-3xl font-semibold">Reviews</h2>
-          {reviews.length === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">
-              No reviews yet. Be the first to travel and share your story.
-            </p>
-          ) : (
-            <ul className="mt-8 grid gap-4 md:grid-cols-2">
-              {reviews.map((r) => (
-                <li key={r.id} className="card-elevated p-5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">
-                      {r.reviewer_username ?? "Anonymous"}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-sm">
-                      <Star className="size-4 fill-accent text-accent" />
-                      {r.rating.toFixed(1)}
-                    </span>
-                  </div>
-                  {r.review_text && (
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      {r.review_text}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </article>
-  );
+				<section>
+					<h2 className="mb-3 text-lg font-semibold">
+						Available guides
+					</h2>
+					{guides.length ? (
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+							{guides.map((guide) => (
+								<Card key={guide.id} className="p-4">
+									<div className="flex items-center gap-3">
+										<Avatar>
+											<AvatarImage
+												src={guide.avatar_url || ""}
+											/>
+											<AvatarFallback>
+												{guide.full_name?.[0] || "G"}
+											</AvatarFallback>
+										</Avatar>
+										<div className="min-w-0">
+											<p className="truncate text-sm font-medium text-foreground">
+												{guide.full_name}
+											</p>
+											<p className="text-xs text-muted-foreground">
+												{guide.distance_km?.toFixed(1)}{" "}
+												km away
+											</p>
+										</div>
+									</div>
+								</Card>
+							))}
+						</div>
+					) : (
+						<p className="text-sm text-muted-foreground">
+							No guides currently listed in this area.
+						</p>
+					)}
+				</section>
+
+				<section>
+					<div className="mb-3 flex items-center justify-between gap-3">
+						<h2 className="text-lg font-semibold">
+							Packages for this destination
+						</h2>
+						<Link href="/packages">
+							<Button size="sm" variant="outline">
+								View all packages
+							</Button>
+						</Link>
+					</div>
+					{packages.length ? (
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+							{packages.map((pkg) => (
+								<Link
+									key={pkg.id}
+									href={`/packages/details/${pkg.id}`}>
+									<Card className="h-full p-4">
+										<div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+											<Package className="h-3.5 w-3.5" />
+											<span>
+												{pkg.type ===
+												"activities_package"
+													? "Activities package"
+													: "Destination package"}
+											</span>
+										</div>
+										<p className="line-clamp-1 text-sm font-semibold text-foreground">
+											{pkg.name}
+										</p>
+										<p className="mt-1 text-xs text-muted-foreground">
+											{pkg.total_days} days
+										</p>
+										<p className="mt-3 text-sm font-medium text-foreground">
+											Rs.{" "}
+											{Number(
+												pkg.discounted_price,
+											).toLocaleString()}
+										</p>
+									</Card>
+								</Link>
+							))}
+						</div>
+					) : (
+						<p className="text-sm text-muted-foreground">
+							No direct packages mapped to this destination yet.
+						</p>
+					)}
+				</section>
+
+				<section>
+					<h2 className="mb-3 text-lg font-semibold">
+						Recent stories
+					</h2>
+					{stories.length ? (
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+							{stories.slice(0, 6).map((story) => (
+								<Link
+									key={story.id}
+									href={`/stories/${story.id}`}>
+									<Card className="h-full overflow-hidden">
+										<div className="relative aspect-4/3">
+											<Image
+												src={
+													story.feature_image ||
+													"/placeholder-destination.jpg"
+												}
+												alt={story.title}
+												fill
+												className="object-cover"
+											/>
+										</div>
+										<div className="p-4">
+											<p className="line-clamp-2 text-sm font-medium text-foreground">
+												{story.title}
+											</p>
+										</div>
+									</Card>
+								</Link>
+							))}
+						</div>
+					) : (
+						<p className="text-sm text-muted-foreground">
+							No stories have been shared for this destination
+							yet.
+						</p>
+					)}
+				</section>
+
+				<section>
+					<h2 className="mb-3 text-lg font-semibold">Reviews</h2>
+					{reviews.length ? (
+						<div className="space-y-3">
+							{reviews.slice(0, 8).map((review) => (
+								<Card key={review.id} className="p-4">
+									<div className="flex items-start justify-between gap-3">
+										<div>
+											<p className="text-sm font-medium text-foreground">
+												{review.first_name ||
+												review.last_name
+													? `${review.first_name ?? ""} ${review.last_name ?? ""}`.trim()
+													: review.username ||
+														"Traveler"}
+											</p>
+											<p className="mt-1 text-sm text-muted-foreground">
+												{review.review_text ||
+													"No written review."}
+											</p>
+										</div>
+										<div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+											<MessageSquare className="h-3.5 w-3.5" />
+											<span>
+												{review.rating ?? "N/A"}
+											</span>
+										</div>
+									</div>
+								</Card>
+							))}
+						</div>
+					) : (
+						<p className="text-sm text-muted-foreground">
+							No reviews yet for this destination.
+						</p>
+					)}
+				</section>
+			</section>
+		</main>
+	);
 }

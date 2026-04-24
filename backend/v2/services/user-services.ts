@@ -1,50 +1,104 @@
-import { z } from "zod";
-import { SupabaseServiceV2 } from "./supabase-service-v2";
+import z from "zod";
+import { SupabaseServiceV2 } from "@/supabase/services/supabaseServicev2";
+import { Validator } from "@/supabase/services/validator";
 import {
-  ProfileSchema,
-  MinimalUserSchema,
-  CompleteOnboardingInputSchema,
-  type CompleteOnboardingInput,
-  type Profile,
-  type MinimalUser,
-} from "../models/user-models";
+	AuthProfile,
+	AuthProfileSchema,
+	OnboardingParam,
+	OnboardingParamSchema,
+	UserInfo,
+	UserInfoSchema,
+} from "../models";
+
+export type UserListOptions = {
+	searchQuery?: string;
+	onlyGuides?: boolean;
+	limit?: number;
+	offset?: number;
+};
 
 export class UserService extends SupabaseServiceV2 {
-  async fetchProfile(targetId?: string): Promise<Profile> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.rpc("fetch_profile", {
-      target_id: targetId ?? null,
-    });
-    const raw = this.handle(data, error, "fetchProfile");
-    return ProfileSchema.parse(raw);
-  }
+	public static async fetchProfile(targetId?: string): Promise<AuthProfile> {
+		return await this.callRpc("fetch_profile", AuthProfileSchema, {
+			target_id: targetId,
+		});
+	}
 
-  async isUsernameAvailable(username: string): Promise<boolean> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.rpc("is_username_available", {
-      username,
-    });
-    return this.handle<boolean>(data as boolean, error, "isUsernameAvailable");
-  }
+	public static async isUsernameAvailable(
+		username: string,
+	): Promise<boolean> {
+		const normalized = username.trim();
+		if (!normalized) {
+			return false;
+		}
 
-  async completeOnboarding(input: CompleteOnboardingInput): Promise<Profile> {
-    const parsed = CompleteOnboardingInputSchema.parse(input);
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.rpc("complete_onbording", parsed);
-    const raw = this.handle(data, error, "completeOnboarding");
-    return ProfileSchema.parse(raw);
-  }
+		return await this.callRpc("is_username_available", z.boolean(), {
+			p_username: normalized,
+		});
+	}
 
-  async listMinimalUsers(ids: string[]): Promise<MinimalUser[]> {
-    if (ids.length === 0) return [];
-    const supabase = await this.createClient();
-    const { data, error } = await supabase
-      .from("minimal_user")
-      .select("*")
-      .in("id", ids);
-    const raw = this.handle(data, error, "listMinimalUsers");
-    return z.array(MinimalUserSchema).parse(raw);
-  }
+	public static async completeOnboarding(
+		params: OnboardingParam,
+	): Promise<AuthProfile> {
+		const payload = Validator.validateAgainstSchema(
+			params,
+			OnboardingParamSchema,
+			"OnboardingParamSchema",
+		);
+
+		return await this.callRpc(
+			"complete_onbording",
+			AuthProfileSchema,
+			payload,
+		);
+	}
+
+	public static async getUsers(
+		options?: UserListOptions,
+	): Promise<UserInfo[]> {
+		const supabase = await this.getClient();
+
+		let query = supabase.from("user_info").select("*");
+
+		if (options?.searchQuery) {
+			query = query.or(
+				`full_name.ilike.%${options.searchQuery}%,username.ilike.%${options.searchQuery}%`,
+			);
+		}
+
+		if (options?.onlyGuides) {
+			query = query.eq("is_guide", true);
+		}
+
+		query = query.order("full_name", { ascending: true });
+
+		if (options?.limit && options.limit > 0) {
+			query = query.limit(options.limit);
+		}
+
+		if (options?.offset !== undefined && options.offset >= 0) {
+			const effectiveLimit =
+				options.limit && options.limit > 0 ? options.limit : 20;
+			query = query.range(
+				options.offset,
+				options.offset + effectiveLimit - 1,
+			);
+		}
+
+		return await this.query(
+			() => query,
+			z.array(UserInfoSchema),
+			"GET_USERS",
+		);
+	}
+
+	public static async getUserById(id: string): Promise<UserInfo> {
+		const supabase = await this.getClient();
+
+		return await this.query(
+			() => supabase.from("user_info").select("*").eq("id", id).single(),
+			UserInfoSchema,
+			"GET_USER_BY_ID",
+		);
+	}
 }
-
-export const userService = new UserService();

@@ -1,44 +1,105 @@
-"use client";
-
 import { create } from "zustand";
+import { ServiceFailure } from "@/supabase/services/supabaseServicev2";
+import { AdminService } from "../services";
+import {
+	ChangeGuideApplicationStatusParams,
+	ChangeGuideApplicationStatusResult,
+	ChangeGuideSuspendStatusParams,
+	ChangeGuideSuspendStatusResult,
+} from "../models";
 
-type MutationKind =
-  | "destination.create"
-  | "destination.update"
-  | "destination.delete"
-  | "activity.create"
-  | "activity.update"
-  | "activity.delete"
-  | "package.create"
-  | "package.update"
-  | "package.delete"
-  | "guide.approve"
-  | "guide.reject"
-  | "guide.suspend"
-  | "guide.unsuspend";
+type AdminStoreError = {
+	type: "VALIDATION" | "SUPABASE" | "PARSING" | "UNKNOWN";
+	message: string;
+	context?: string;
+	originalError?: unknown;
+};
 
-interface MutationResult {
-  id: string;
-  kind: MutationKind;
-  status: "pending" | "success" | "error";
-  message?: string;
-  at: number;
+interface AdminStoreState {
+	lastGuideApplicationStatusChange: ChangeGuideApplicationStatusResult | null;
+	lastGuideSuspendStatusChange: ChangeGuideSuspendStatusResult | null;
+	isLoading: boolean;
+	error: AdminStoreError | null;
+
+	changeGuideApplicationStatus: (
+		params: ChangeGuideApplicationStatusParams,
+	) => Promise<ChangeGuideApplicationStatusResult | null>;
+	changeGuideSuspendStatus: (
+		params: ChangeGuideSuspendStatusParams,
+	) => Promise<ChangeGuideSuspendStatusResult | null>;
+	clearError: () => void;
+	resetMutationState: () => void;
 }
 
-interface AdminState {
-  mutations: MutationResult[];
-  push: (m: Omit<MutationResult, "at">) => void;
-  update: (id: string, patch: Partial<MutationResult>) => void;
-  clear: () => void;
-}
+const toStoreError = (error: unknown): AdminStoreError => {
+	if (error instanceof ServiceFailure) {
+		return {
+			type: error.type,
+			message: error.message,
+			context: error.context,
+			originalError: error.originalError,
+		};
+	}
 
-export const useAdminStore = create<AdminState>((set) => ({
-  mutations: [],
-  push: (m) =>
-    set((s) => ({ mutations: [{ ...m, at: Date.now() }, ...s.mutations] })),
-  update: (id, patch) =>
-    set((s) => ({
-      mutations: s.mutations.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-    })),
-  clear: () => set({ mutations: [] }),
+	if (error instanceof Error) {
+		return {
+			type: "UNKNOWN",
+			message: error.message,
+			originalError: error,
+		};
+	}
+
+	return {
+		type: "UNKNOWN",
+		message: "Unknown error",
+		originalError: error,
+	};
+};
+
+export const useV2AdminStore = create<AdminStoreState>((set) => ({
+	lastGuideApplicationStatusChange: null,
+	lastGuideSuspendStatusChange: null,
+	isLoading: false,
+	error: null,
+
+	changeGuideApplicationStatus: async (params) => {
+		set({ isLoading: true, error: null });
+
+		try {
+			const updatedGuideApplication =
+				await AdminService.changeGuideApplicationStatus(params);
+			set({
+				lastGuideApplicationStatusChange: updatedGuideApplication,
+				isLoading: false,
+			});
+			return updatedGuideApplication;
+		} catch (error) {
+			set({ error: toStoreError(error), isLoading: false });
+			return null;
+		}
+	},
+
+	changeGuideSuspendStatus: async (params) => {
+		set({ isLoading: true, error: null });
+
+		try {
+			const updatedGuideSuspendState =
+				await AdminService.changeGuideSuspendStatus(params);
+			set({
+				lastGuideSuspendStatusChange: updatedGuideSuspendState,
+				isLoading: false,
+			});
+			return updatedGuideSuspendState;
+		} catch (error) {
+			set({ error: toStoreError(error), isLoading: false });
+			return null;
+		}
+	},
+
+	clearError: () => set({ error: null }),
+	resetMutationState: () =>
+		set({
+			lastGuideApplicationStatusChange: null,
+			lastGuideSuspendStatusChange: null,
+		}),
 }));

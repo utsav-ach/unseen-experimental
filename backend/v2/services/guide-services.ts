@@ -1,78 +1,142 @@
-import { z } from "zod";
-import { SupabaseServiceV2 } from "./supabase-service-v2";
+import z from "zod";
+import { SupabaseServiceV2 } from "@/supabase/services/supabaseServicev2";
+import { Validator } from "@/supabase/services/validator";
 import {
-  GuideInfoSchema,
-  GuideReviewSchema,
-  SuspendedGuideSchema,
-  type GuideInfo,
-  type GuideReview,
-  type SuspendedGuide,
-} from "../models/guide-models";
-import { Uuid } from "../schemas/field-types";
+	GuideInfo,
+	GuideInfoSchema,
+	GuideProfile,
+	GuideProfileSchema,
+	GuideReviewParamsSchema,
+} from "../models";
+import { f } from "../schemas";
+
+export type GuideListOptions = {
+	onlyAvailable?: boolean;
+	searchQuery?: string;
+	minRating?: number;
+	sortBy?: "avg_rating" | "full_name";
+	limit?: number;
+	offset?: number;
+};
 
 export class GuideService extends SupabaseServiceV2 {
-  async listAvailableGuides(): Promise<GuideInfo[]> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.from("available_guides").select("*");
-    const raw = this.handle(data, error, "listAvailableGuides");
-    return z.array(GuideInfoSchema).parse(raw);
-  }
+	public static async getGuides(
+		options?: GuideListOptions,
+	): Promise<GuideInfo[]> {
+		const supabase = await this.getClient();
+		const table = options?.onlyAvailable
+			? "available_guides"
+			: "guide_info";
 
-  async getGuide(id: string): Promise<GuideInfo> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.rpc("fetch_guide_profile", {
-      target_id: Uuid.parse(id),
-    });
-    const raw = this.handle(data, error, "getGuide");
-    return GuideInfoSchema.parse(raw);
-  }
+		let query = supabase.from(table).select("*");
 
-  async reviewGuide(
-    guideId: string,
-    rating: number,
-    reviewText?: string,
-  ): Promise<string> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.rpc("review_guide", {
-      guide_id: guideId,
-      rating,
-      review_text: reviewText ?? null,
-    });
-    return this.handle<string>(data as string, error, "reviewGuide");
-  }
+		if (options?.searchQuery) {
+			query = query.or(
+				`full_name.ilike.%${options.searchQuery}%,username.ilike.%${options.searchQuery}%,description.ilike.%${options.searchQuery}%`,
+			);
+		}
 
-  async listReviews(guideId: string): Promise<GuideReview[]> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase
-      .from("guide_reviews")
-      .select("*")
-      .eq("guide_id", guideId)
-      .order("created_at", { ascending: false });
-    const raw = this.handle(data, error, "listReviews");
-    return z.array(GuideReviewSchema).parse(raw);
-  }
+		if (options?.minRating !== undefined) {
+			query = query.gte("avg_rating", options.minRating);
+		}
 
-  async getGuidesForDestination(
-    latitude: number,
-    longitude: number,
-    limit = 20,
-  ): Promise<GuideInfo[]> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.rpc("get_guides_for_destination", {
-      lat: latitude,
-      lon: longitude,
-      result_limit: limit,
-    });
-    const raw = this.handle(data, error, "getGuidesForDestination");
-    return z.array(GuideInfoSchema).parse(raw);
-  }
+		switch (options?.sortBy) {
+			case "full_name":
+				query = query.order("full_name", { ascending: true });
+				break;
+			case "avg_rating":
+			default:
+				query = query
+					.order("avg_rating", {
+						ascending: false,
+						nullsFirst: false,
+					})
+					.order("full_name", { ascending: true });
+		}
 
-  async getSuspendedGuides(): Promise<SuspendedGuide[]> {
-    const supabase = await this.createClient();
-    const { data, error } = await supabase.rpc("get_suspended_guides");
-    const raw = this.handle(data, error, "getSuspendedGuides");
-    return z.array(SuspendedGuideSchema).parse(raw);
-  }
+		if (options?.limit && options.limit > 0) {
+			query = query.limit(options.limit);
+		}
+
+		if (options?.offset !== undefined && options.offset >= 0) {
+			const effectiveLimit =
+				options.limit && options.limit > 0 ? options.limit : 20;
+			query = query.range(
+				options.offset,
+				options.offset + effectiveLimit - 1,
+			);
+		}
+
+		return await this.query(
+			() => query,
+			z.array(GuideInfoSchema),
+			"GET_GUIDES",
+		);
+	}
+
+	public static async getGuideById(
+		id: string,
+		options?: { onlyAvailable?: boolean },
+	): Promise<GuideInfo> {
+		const supabase = await this.getClient();
+		const table = options?.onlyAvailable
+			? "available_guides"
+			: "guide_info";
+
+		return await this.query(
+			() => supabase.from(table).select("*").eq("id", id).single(),
+			GuideInfoSchema,
+			"GET_GUIDE_BY_ID",
+		);
+	}
+
+	public static async getGuideDiscoveryCards(options?: {
+		searchQuery?: string;
+		minRating?: number;
+		limit?: number;
+		offset?: number;
+	}): Promise<GuideInfo[]> {
+		return this.getGuides({
+			onlyAvailable: true,
+			searchQuery: options?.searchQuery,
+			minRating: options?.minRating,
+			sortBy: "avg_rating",
+			limit: options?.limit,
+			offset: options?.offset,
+		});
+	}
+
+	public static async fetchGuideProfile(
+		targetId?: string,
+	): Promise<GuideProfile> {
+		return await this.callRpc("fetch_guide_profile", GuideProfileSchema, {
+			target_id: targetId,
+		});
+	}
+
+	public static async reviewGuide(params: {
+		p_guide_id: string;
+		p_rating: number;
+		p_review_text?: string | null;
+	}): Promise<string> {
+		const payload = Validator.validateAgainstSchema(
+			params,
+			GuideReviewParamsSchema,
+			"GuideReviewParamsSchema",
+		);
+
+		return await this.callRpc("review_guide", f.uuid(), payload);
+	}
+
+	public static async getGuidesForDestination(params: {
+		p_lat: number;
+		p_lon: number;
+		p_limit?: number;
+	}): Promise<GuideInfo[]> {
+		return await this.callRpcArray(
+			"get_guides_for_destination",
+			GuideInfoSchema,
+			params,
+		);
+	}
 }
-
-export const guideService = new GuideService();

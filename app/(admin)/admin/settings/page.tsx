@@ -1,18 +1,12 @@
-import type { Metadata } from "next";
+import { Metadata } from "next";
+import { AdminSettingsPage } from "@/components/admin/admin-settings-page";
 
 export const metadata: Metadata = {
-  title: "Admin · Settings",
-  description: "Admin settings management.",
+	title: "Admin Settings | Unseen Nepal",
+	description: "Operational settings and admin strategy notes.",
+	robots: { index: false, follow: false },
 };
 
-export default function AdminPage() {
-  return (
-    <section className="p-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="mt-2 text-muted-foreground">
-        Settings management lands in a follow-up PR. CRUD RPCs already exist in{" "}
-        <code>AdminService</code>.
-      </p>
-    </section>
-  );
+export default function Page() {
+	return <AdminSettingsPage />;
 }

@@ -1,18 +1,13 @@
-import type { Metadata } from "next";
+import { Metadata } from "next";
+import { AdminDestinationsPage } from "@/components/admin/admin-destinations-page";
 
 export const metadata: Metadata = {
-  title: "Admin · Destinations",
-  description: "Admin destinations management.",
+	title: "Destinations Admin | Unseen Nepal",
+	description:
+		"Manage featured destinations used by discovery and booking flow.",
+	robots: { index: false, follow: false },
 };
 
-export default function AdminPage() {
-  return (
-    <section className="p-6">
-      <h1 className="text-2xl font-bold">Destinations</h1>
-      <p className="mt-2 text-muted-foreground">
-        Destinations management lands in a follow-up PR. CRUD RPCs already exist in{" "}
-        <code>AdminService</code>.
-      </p>
-    </section>
-  );
+export default function Page() {
+	return <AdminDestinationsPage />;
 }

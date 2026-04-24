@@ -1,51 +1,76 @@
-import { z } from "zod";
+import z from "zod";
 
-export const HiringProposalStatus = z.enum([
-  "sent_by_tourist",
-  "offered_by_guide",
-  "rejected_by_guide",
-  "cancelled_by_tourist",
-  "accepted_by_tourist",
-]);
-export type HiringProposalStatus = z.infer<typeof HiringProposalStatus>;
+export const enums = {
+	userRole: ["tourist", "guide", "hotel_owner", "admin"],
+	verificationStatus: ["pending", "approved", "rejected"],
+	bookingStatus: [
+		"pending",
+		"confirmed",
+		"completed",
+		"cancelled",
+		"reported",
+	],
+	bookingRequestStatus: [
+		"pending",
+		"approved",
+		"rejected",
+		"confirmed",
+		"cancelled",
+	],
+	nidType: ["citizenship", "nid", "license", "pan", "passport", "voter_id"],
+	guideApplicationStatus: ["pending", "approved", "rejected"],
+	packageType: ["destinations_package", "activities_package"],
+	proposalStatus: [
+		"sent_by_tourist",
+		"offered_by_guide",
+		"rejected_by_guide",
+		"cancelled_by_tourist",
+		"accepted_by_tourist",
+	],
+	guideBookingStatus: ["confirmed", "completed", "cancelled"],
+	packageBookingStatus: ["confirmed", "completed", "cancelled"],
+	paymentProvider: ["esewa", "khalti", "stripe", "paypal", "card", "cash"],
+	paymentLogStatus: ["pending", "succeeded", "failed", "refunded"],
+} as const;
 
-export const BookingStatus = z.enum([
-  "pending_payment",
-  "confirmed",
-  "in_progress",
-  "completed",
-  "cancelled",
-  "disputed",
-]);
-export type BookingStatus = z.infer<typeof BookingStatus>;
+const makeEnumSchemas = <
+	T extends Record<string, readonly [string, ...string[]]>,
+>(
+	obj: T,
+): { [K in keyof T]: z.ZodType<T[K][number]> } => {
+	const schemas = {} as { [K in keyof T]: z.ZodType<T[K][number]> };
 
-export const PaymentStatus = z.enum([
-  "pending",
-  "succeeded",
-  "failed",
-  "refunded",
-]);
-export type PaymentStatus = z.infer<typeof PaymentStatus>;
+	for (const key of Object.keys(obj) as Array<keyof T>) {
+		const values = obj[key];
+		schemas[key] = z.enum(
+			values as unknown as [string, ...string[]],
+		) as z.ZodType<T[typeof key][number]>;
+	}
 
-export const GuideApplicationStatus = z.enum([
-  "pending",
-  "approved",
-  "rejected",
-  "revision_requested",
-]);
-export type GuideApplicationStatus = z.infer<typeof GuideApplicationStatus>;
+	return schemas;
+};
 
-export const UnsuspensionRequestStatus = z.enum([
-  "pending",
-  "approved",
-  "rejected",
-]);
-export type UnsuspensionRequestStatus = z.infer<
-  typeof UnsuspensionRequestStatus
->;
+export const enumSchemas = makeEnumSchemas(enums);
 
-export const TravelPackageType = z.enum(["destination", "activity"]);
-export type TravelPackageType = z.infer<typeof TravelPackageType>;
-
-export const StoryVisibility = z.enum(["public", "unlisted", "archived"]);
-export type StoryVisibility = z.infer<typeof StoryVisibility>;
+const nullableEnumSchemas = Object.fromEntries(
+	Object.entries(enumSchemas).map(([key, schema]) => [
+		key,
+		schema.nullable(),
+	]),
+) as {
+	[K in keyof typeof enumSchemas]: z.ZodNullable<(typeof enumSchemas)[K]>;
+};
+/**
+ * fe,
+ * and no for those science nerds its not iron
+ *
+ * fe, stands for field enums,  and it contains the enums used in our app
+ * unlike the f and fn we dont need to invoke it as a function because they are already zod schemas and not factories
+ *
+ * we can use it directly like fe.userRole or fe.bookingStatus and so on
+ *
+ * When invoke is necessary ?
+ * on chaining like fe.bookingStatus.default("pending") or fe.bookingStatus.nullable() and so on
+ */
+export const fe = enumSchemas;
+export const fne = nullableEnumSchemas;

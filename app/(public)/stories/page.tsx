@@ -1,100 +1,192 @@
-import type { Metadata } from "next";
-import Image from "next/image";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { PenLine } from "lucide-react";
-import { storyService } from "@/backend/v2/services/story-services";
-import { env } from "@/lib/env";
-import { featuredStories } from "@/lib/images";
+import { Upload, SearchX, Loader2, ArrowRight } from "lucide-react";
+import { useStoryStore } from "@/backend/v2/stores/useStoryStore";
+import { Navbar } from "@/components/navbar";
+import { Button } from "@/components/ui/button";
+import { StorySearch } from "@/components/stories/story-search";
+import { StorySortFilter } from "@/components/stories/story-sort-filter";
+import { StoryListCard } from "@/components/stories/story-list-card";
+import { useDebounce } from "use-debounce";
 
-export const metadata: Metadata = {
-  title: "Stories",
-  description: "Travel stories from the Unseen Nepal community.",
-};
+export default function StoriesPage() {
+	const { stories, total, isLoading, fetchStoriesPage } = useStoryStore();
 
-export default async function StoriesPage() {
-  const live = env.BACKEND_URL
-    ? await storyService.listStories().catch(() => [])
-    : [];
+	// State management
+	const [searchQuery, setSearchQuery] = useState("");
+	const [debouncedSearch] = useDebounce(searchQuery, 400);
+	const [category, setCategory] = useState<string | null>(null);
+	const [sortBy, setSortBy] = useState("latest");
+	const [offset, setOffset] = useState(0);
+	const limit = 12;
 
-  const items =
-    live.length > 0
-      ? live.map((s) => ({
-          id: s.id,
-          title: s.title,
-          excerpt: s.content.slice(0, 220),
-          image: s.feature_image ?? featuredStories[0].image,
-          author: s.author.username,
-          readMinutes: Math.max(3, Math.round(s.content.length / 900)),
-        }))
-      : featuredStories;
+	// Fetch stories on filter/search change
+	useEffect(() => {
+		fetchStoriesPage({
+			limit,
+			offset,
+			category,
+			sortBy,
+			searchQuery: debouncedSearch,
+		});
+	}, [fetchStoriesPage, offset, category, sortBy, debouncedSearch]);
 
-  return (
-    <div className="bg-background">
-      <section className="border-b border-border/60 bg-secondary/40">
-        <div className="container-wide flex flex-col items-start justify-between gap-6 py-16 md:flex-row md:items-end">
-          <div>
-            <p className="section-eyebrow">From the trail</p>
-            <h1 className="mt-3 font-display text-5xl font-semibold tracking-tight sm:text-6xl">
-              Stories
-            </h1>
-            <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
-              Raw, unfiltered dispatches from travellers and guides. Lessons
-              at altitude, butter-tea epiphanies, and everything in between.
-            </p>
-          </div>
-          <Link
-            href="/stories/add"
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            <PenLine className="size-4" />
-            Share a story
-          </Link>
-        </div>
-      </section>
+	const handleCategoryChange = (cat: string | null) => {
+		setCategory(cat);
+		setOffset(0);
+	};
 
-      <section className="container-wide py-16">
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No stories yet.</p>
-        ) : (
-          <ul className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {items.map((s, idx) => (
-              <li key={s.id}>
-                <Link href={`/stories/${s.id}`} className="group block">
-                  <article className="card-elevated h-full">
-                    <div className="relative aspect-[16/10] overflow-hidden">
-                      <Image
-                        src={s.image}
-                        alt={s.title}
-                        fill
-                        priority={idx < 2}
-                        sizes="(min-width: 1024px) 33vw, 100vw"
-                        className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-                      />
-                    </div>
-                    <div className="space-y-3 p-5">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-accent">
-                        {s.readMinutes} min read
-                      </p>
-                      <h2 className="font-display text-xl font-semibold leading-tight">
-                        {s.title}
-                      </h2>
-                      <p className="line-clamp-3 text-sm text-muted-foreground">
-                        {s.excerpt}
-                      </p>
-                      <p className="pt-2 text-xs text-muted-foreground">
-                        by{" "}
-                        <span className="font-medium text-foreground">
-                          {s.author}
-                        </span>
-                      </p>
-                    </div>
-                  </article>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
+	const handleClearFilters = () => {
+		setSearchQuery("");
+		setCategory(null);
+		setSortBy("latest");
+		setOffset(0);
+	};
+
+	const hasResults = stories.length > 0;
+	const totalPages = Math.ceil(total / limit);
+	const currentPage = Math.floor(offset / limit) + 1;
+
+	return (
+		<div className="min-h-screen bg-background">
+			<Navbar />
+
+			{/* Hero Section */}
+			<main className="mx-auto max-w-7xl px-4 pt-24 pb-16 sm:px-6 lg:px-8">
+				<div className="space-y-8">
+					{/* Header */}
+					<div className="space-y-4">
+						<div className="inline-block px-3 py-1 text-xs font-semibold bg-primary/10 text-primary rounded-full">
+							Community Journals
+						</div>
+						<h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+							Travel Stories
+						</h1>
+						<p className="text-lg text-muted-foreground max-w-2xl">
+							Explore real experiences shared by the Unseen Nepal
+							community. Discover authentic travel insights and
+							inspiration from fellow explorers.
+						</p>
+					</div>
+
+					{/* Search Section */}
+					<div className="bg-muted/30 rounded-lg p-6 space-y-4">
+						<StorySearch
+							value={searchQuery}
+							onChange={setSearchQuery}
+							placeholder="Search stories, locations, or authors..."
+						/>
+
+						{/* Filters and Sort */}
+						<StorySortFilter
+							sortBy={sortBy}
+							onSortChange={setSortBy}
+							category={category}
+							onCategoryChange={handleCategoryChange}
+							onClearFilters={handleClearFilters}
+						/>
+
+						{/* Share Story CTA */}
+						<div className="pt-4 border-t border-border">
+							<Button asChild className="gap-2">
+								<Link href="/stories/add">
+									<Upload className="h-4 w-4" />
+									Share your story
+								</Link>
+							</Button>
+						</div>
+					</div>
+				</div>
+			</main>
+
+			{/* Results Section */}
+			<div className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
+				{/* Results Counter */}
+				{hasResults && (
+					<div className="mb-8 flex items-center justify-between pb-6 border-b">
+						<div className="space-y-1">
+							<p className="text-sm font-medium text-muted-foreground">
+								{total} {total === 1 ? "story" : "stories"}{" "}
+								found
+							</p>
+							<p className="text-xs text-muted-foreground/70">
+								Page {currentPage} of {totalPages}
+							</p>
+						</div>
+					</div>
+				)}
+
+				{/* Loading State */}
+				{isLoading && stories.length === 0 ? (
+					<div className="flex flex-col items-center justify-center py-20">
+						<Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+						<p className="text-sm text-muted-foreground">
+							Loading stories...
+						</p>
+					</div>
+				) : hasResults ? (
+					<>
+						{/* Stories Grid */}
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+							{stories.map((story) => (
+								<StoryListCard key={story.id} story={story} />
+							))}
+						</div>
+
+						{/* Pagination */}
+						{totalPages > 1 && (
+							<div className="flex items-center justify-center gap-4">
+								<Button
+									variant="outline"
+									disabled={offset === 0}
+									onClick={() =>
+										setOffset(Math.max(0, offset - limit))
+									}>
+									Previous
+								</Button>
+
+								<span className="text-sm text-muted-foreground">
+									Page {currentPage} of {totalPages}
+								</span>
+
+								<Button
+									variant="outline"
+									disabled={offset + limit >= total}
+									onClick={() => setOffset(offset + limit)}>
+									Next
+								</Button>
+							</div>
+						)}
+					</>
+				) : (
+					/* Empty State */
+					<div className="rounded-lg border-2 border-dashed bg-muted/20 p-12 text-center">
+						<SearchX className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+						<h3 className="text-lg font-semibold text-foreground mb-2">
+							No stories found
+						</h3>
+						<p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+							Try adjusting your search filters or be the first to
+							share a story from your travels.
+						</p>
+						<div className="flex flex-col sm:flex-row gap-3 justify-center">
+							<Button
+								variant="outline"
+								onClick={handleClearFilters}>
+								Clear filters
+							</Button>
+							<Button asChild className="gap-2">
+								<Link href="/stories/add">
+									<Upload className="h-4 w-4" />
+									Share your story
+								</Link>
+							</Button>
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+	);
 }

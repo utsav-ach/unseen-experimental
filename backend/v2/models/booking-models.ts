@@ -1,85 +1,155 @@
 import { z } from "zod";
-import { Uuid, Timestamp, Money, PositiveInt } from "../schemas/field-types";
-import {
-  HiringProposalStatus,
-  BookingStatus,
-  PaymentStatus,
-} from "../schemas/enums";
+import { f, fe, fn } from "../schemas";
 
-export const HiringProposalSchema = z.object({
-  id: Uuid,
-  tourist_id: Uuid,
-  guide_id: Uuid,
-  destinations: z.array(Uuid),
-  people_count: PositiveInt,
-  duration_days: PositiveInt,
-  total_quoted_price: Money.nullable(),
-  prepay_required: Money.nullable(),
-  status: HiringProposalStatus,
-  tourist_remarks: z.string().nullable(),
-  guide_remarks: z.string().nullable(),
-  created_at: Timestamp,
-  updated_at: Timestamp,
-});
-export type HiringProposal = z.infer<typeof HiringProposalSchema>;
-
-export const GuideBookingSchema = z.object({
-  id: Uuid,
-  proposal_id: Uuid,
-  tourist_id: Uuid,
-  guide_id: Uuid,
-  final_amount: Money,
-  prepay_amount: Money,
-  paid_amount: Money,
-  status: BookingStatus,
-  trip_start_date: Timestamp.nullable(),
-  hired_at: Timestamp,
-});
-export type GuideBooking = z.infer<typeof GuideBookingSchema>;
-
-export const PackageBookingSchema = z.object({
-  id: Uuid,
-  package_id: Uuid,
-  tourist_id: Uuid,
-  people_count: PositiveInt,
-  total_amount: Money,
-  paid_amount: Money,
-  status: BookingStatus,
-  trip_start_date: Timestamp.nullable(),
-  created_at: Timestamp,
-});
-export type PackageBooking = z.infer<typeof PackageBookingSchema>;
+/**
+ * Bookings module schemas
+ * Views
+ */
 
 export const PaymentLogSchema = z.object({
-  id: Uuid,
-  guide_booking_id: Uuid.nullable(),
-  package_booking_id: Uuid.nullable(),
-  tourist_id: Uuid,
-  provider: z.string(),
-  provider_txn_id: z.string(),
-  amount: Money,
-  currency: z.string(),
-  status: PaymentStatus,
-  raw_response: z.unknown().nullable(),
-  created_at: Timestamp,
+	status: z.enum(["pending", "succeeded", "failed", "refunded"]),
+	provider: z.enum(["esewa", "khalti", "stripe", "paypal", "card", "cash"]),
+	currency: z.string(),
+	created_at: f.datetime(),
 });
-export type PaymentLog = z.infer<typeof PaymentLogSchema>;
 
-export const CreateHiringProposalInputSchema = z.object({
-  guide_id: Uuid,
-  destinations: z.array(Uuid).min(1),
-  people_count: PositiveInt,
-  duration_days: PositiveInt,
-  tourist_remarks: z.string().optional(),
-});
-export type CreateHiringProposalInput = z.infer<
-  typeof CreateHiringProposalInputSchema
->;
+export const GuideBookingRequestSchema = z.object({
+	id: f.uuid(),
 
-export const SubmitGuideOfferInputSchema = z.object({
-  proposal_id: Uuid,
-  total_quoted_price: Money,
-  prepay_required: Money,
-  guide_remarks: z.string().optional(),
+	tourist_id: f.uuid(),
+	guide_id: f.uuid(),
+
+	destinations: z.string(),
+	people_count: z.number().int().positive(),
+	duration_days: z.number().int().positive(),
+
+	additional_details: fn.name(),
+
+	status: z.enum([
+		"pending",
+		"approved",
+		"rejected",
+		"confirmed",
+		"cancelled",
+	]),
+
+	total_cost: fn.money(),
+	prepay_amount: fn.money(),
+
+	guide_remarks: fn.name(),
+	tourist_remarks: fn.name(),
+
+	created_at: f.datetime(),
+	updated_at: f.datetime(),
 });
-export type SubmitGuideOfferInput = z.infer<typeof SubmitGuideOfferInputSchema>;
+
+export type GuideBookingRequest = z.infer<typeof GuideBookingRequestSchema>;
+
+export const GuideBookingInfoSchema = z.object({
+	id: f.uuid(),
+
+	tourist_id: f.uuid(),
+	guide_id: f.uuid(),
+
+	trip_start_date: z.string().date().nullable(),
+
+	total_amount: f.money(),
+
+	message: fn.name(),
+
+	status: z.enum(["confirmed", "completed", "cancelled"]),
+
+	hired_at: f.datetime(),
+
+	destination_name: z.string(),
+	is_payment_received: f.bool(),
+	payment_logs: z.array(PaymentLogSchema).nullable().default([]),
+});
+export type GuideBookingInfo = z.infer<typeof GuideBookingInfoSchema>;
+
+export const PackageBookingInfoSchema = z.object({
+	id: f.uuid(),
+
+	tourist_id: f.uuid(),
+	package_id: f.uuid(),
+
+	participant_count: z.number().int().positive(),
+
+	total_amount: f.money(),
+
+	booking_status: z.enum(["confirmed", "completed", "cancelled"]),
+
+	created_at: f.datetime(),
+	updated_at: f.datetime(),
+
+	payment_logs: z.array(PaymentLogSchema).nullable().default([]),
+});
+
+export type PackageBookingInfo = z.infer<typeof PackageBookingInfoSchema>;
+
+/**
+ * RPC params + results
+ */
+
+export const CreateHiringProposalParamsSchema = z.object({
+	p_guide_id: f.uuid(),
+	p_destinations: f.name(),
+	p_people_count: f.positiveNumber(),
+	p_duration_days: f.positiveNumber(),
+	p_additional_details: fn.name(),
+	p_tourist_remarks: fn.name(),
+});
+
+export const CreateHiringProposalResultSchema = f.uuid();
+
+export const SubmitGuideOfferParamsSchema = z.object({
+	p_proposal_id: f.uuid(),
+	p_total_quoted_price: f.money(),
+	p_prepay_required: f.money(),
+	p_guide_remarks: f.name(),
+});
+
+export const RejectHiringProposalParamsSchema = z.object({
+	p_proposal_id: f.uuid(),
+	p_guide_remarks: fn.name(),
+	p_tourist_remarks: fn.name(),
+});
+
+export const CancelHiringProposalParamsSchema = z.object({
+	p_proposal_id: f.uuid(),
+	p_tourist_remarks: fn.name(),
+});
+
+export const AcceptHiringProposalAndCreateBookingParamsSchema = z.object({
+	p_proposal_id: f.uuid(),
+	p_tourist_remarks: fn.name(),
+	p_payment_provider: fe.paymentProvider.default("cash"),
+	p_paid_amount: fn.money(),
+	p_provider_txn_id: fn.name(),
+	p_raw_response: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const AcceptHiringProposalAndCreateBookingResultSchema = z.object({
+	booking_id: f.uuid(),
+	proposal_id: f.uuid(),
+	paid_amount: f.money(),
+	final_amount: f.money(),
+	status: fe.guideBookingStatus,
+});
+
+export const CreatePackageBookingParamsSchema = z.object({
+	p_package_id: f.uuid(),
+	p_payment_provider: fe.paymentProvider.default("cash"),
+	p_paid_amount: fn.money(),
+	p_participant_count: z.number().int().positive().default(1),
+	p_provider_txn_id: fn.name(),
+	p_raw_response: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const CreatePackageBookingResultSchema = z.object({
+	package_booking_id: f.uuid(),
+	package_id: f.uuid(),
+	final_amount: f.money(),
+	paid_amount: f.money(),
+	status: fe.packageBookingStatus,
+});

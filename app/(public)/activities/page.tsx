@@ -1,114 +1,121 @@
-import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
-import {
-  Mountain,
-  Compass,
-  Waves,
-  Tent,
-  Camera,
-  Flame,
-  Leaf,
-  Plane,
-} from "lucide-react";
-import { destinationService } from "@/backend/v2/services/destination-services";
-import { env } from "@/lib/env";
-import { featuredDestinations } from "@/lib/images";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Activities",
-  description:
-    "Pick an activity and we'll match you with destinations and guides across Nepal.",
-};
+import { useEffect } from "react";
+import { useActivityStore } from "@/backend/v2/stores/useActivityStore";
+import { ActivityCard } from "@/components/activities/activity-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { motion } from "framer-motion";
+import { Compass, Sparkles } from "lucide-react";
 
-const fallbackActivities = [
-  { id: "trekking", name: "Trekking", icon: Mountain, description: "Multi-day mountain journeys." },
-  { id: "climbing", name: "Climbing", icon: Compass, description: "Expedition and peak climbing." },
-  { id: "rafting", name: "Rafting", icon: Waves, description: "White water on glacial rivers." },
-  { id: "camping", name: "Camping", icon: Tent, description: "High-alpine and forest camps." },
-  { id: "photography", name: "Photography", icon: Camera, description: "Sunrise, people, wildlife." },
-  { id: "culture", name: "Culture", icon: Flame, description: "Temples, festivals, kitchens." },
-  { id: "wildlife", name: "Wildlife", icon: Leaf, description: "Rhinos, tigers, Himalayan birds." },
-  { id: "paragliding", name: "Paragliding", icon: Plane, description: "Tandem flights over Pokhara." },
-];
+export default function ActivitiesPage() {
+	const { activities, isLoading, fetchActivities, error } =
+		useActivityStore();
 
-export default async function ActivitiesPage() {
-  const live = env.BACKEND_URL
-    ? await destinationService.listActivities().catch(() => [])
-    : [];
+	useEffect(() => {
+		fetchActivities();
+	}, [fetchActivities]);
 
-  return (
-    <div className="bg-background">
-      <section className="relative isolate overflow-hidden border-b border-border/60">
-        <div className="absolute inset-0 -z-10">
-          <Image
-            src={featuredDestinations[1].image}
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover opacity-40"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background via-background/85 to-background" />
-        </div>
-        <div className="container-wide py-20">
-          <p className="section-eyebrow">What do you want to do?</p>
-          <h1 className="mt-3 font-display text-5xl font-semibold tracking-tight sm:text-6xl">
-            Activities
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
-            Pick an activity — we&apos;ll surface the destinations, packages,
-            and guides that specialise in it.
-          </p>
-        </div>
-      </section>
+	if (error) {
+		return (
+			<div className="flex flex-col items-center justify-center min-h-[60vh] text-destructive p-8 animate-in fade-in slide-in-from-bottom-4">
+				<div className="bg-destructive/10 p-4 rounded-full mb-4">
+					<Sparkles className="w-8 h-8" />
+				</div>
+				<h2 className="text-2xl font-serif font-bold mb-2">
+					Discovery Interrupted
+				</h2>
+				<p className="text-muted-foreground text-center max-w-md">
+					{error}
+				</p>
+				<button
+					onClick={() => fetchActivities(true)}
+					className="mt-6 px-6 py-2 bg-primary text-primary-foreground rounded-full text-sm font-bold hover:scale-105 active:scale-95 transition-all duration-300 shadow-lg shadow-primary/20">
+					Try Discovery Again
+				</button>
+			</div>
+		);
+	}
 
-      <section className="container-wide py-16">
-        {live.length > 0 ? (
-          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {live.map((a) => (
-              <li key={a.id}>
-                <Link
-                  href={`/activities/details/${a.id}`}
-                  className="card-elevated block p-6"
-                >
-                  <h3 className="font-display text-xl font-semibold">
-                    {a.name}
-                  </h3>
-                  {a.description && (
-                    <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
-                      {a.description}
-                    </p>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {fallbackActivities.map(({ id, name, icon: Icon, description }) => (
-              <li key={id}>
-                <Link
-                  href={`/activities/details/${id}`}
-                  className="card-elevated flex h-full flex-col gap-3 p-6"
-                >
-                  <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Icon className="size-5" />
-                  </span>
-                  <div>
-                    <h3 className="font-display text-lg font-semibold">
-                      {name}
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {description}
-                    </p>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
+	return (
+		<main className="min-h-screen bg-background relative overflow-hidden">
+			{/* Visual Accents (Background patterns) */}
+			<div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/2 rounded-full blur-[120px] -z-10 pointer-events-none" />
+			<div className="absolute -bottom-[20%] -left-[10%] w-[800px] h-[800px] bg-primary/2 rounded-full blur-[150px] -z-10 pointer-events-none" />
+
+			{/* Hero Section (Aesthetic alignment with Signature Activities header) */}
+			<section className="relative pt-32 pb-16 px-4 md:px-8">
+				<div className="max-w-7xl mx-auto">
+					<motion.div
+						initial={{ opacity: 0, x: -20 }}
+						animate={{ opacity: 1, x: 0 }}
+						className="flex items-center gap-2 text-primary tracking-[0.2em] font-bold text-[10px] uppercase mb-4">
+						<Sparkles className="w-3.5 h-3.5" />
+						Signature Activities
+					</motion.div>
+
+					<motion.div
+						initial={{ opacity: 0, y: 30 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ delay: 0.1 }}
+						className="max-w-3xl">
+						<h1 className="text-5xl md:text-7xl font-serif font-bold text-foreground mb-6 leading-tight">
+							Curated{" "}
+							<span className="italic text-primary/80">
+								Experiences
+							</span>
+						</h1>
+						<p className="text-lg text-muted-foreground leading-relaxed font-medium">
+							Choose your adventure — each crafted for comfort,
+							safety, and unforgettable memories. Our activities
+							are designed to immerse you in the authentic heart
+							of legendary Nepal.
+						</p>
+					</motion.div>
+				</div>
+			</section>
+
+			{/* Content Grid */}
+			<section className="pb-32 px-4 md:px-8">
+				<div className="max-w-7xl mx-auto">
+					{isLoading ? (
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
+							{[1, 2, 3, 4, 5, 6].map((i) => (
+								<div key={i} className="space-y-4">
+									<Skeleton className="aspect-[4/3] w-full rounded-2xl" />
+									<div className="space-y-4 pt-2">
+										<Skeleton className="h-4 w-1/4 rounded-full" />
+										<Skeleton className="h-8 w-3/4" />
+										<Skeleton className="h-20 w-full" />
+									</div>
+								</div>
+							))}
+						</div>
+					) : activities.length > 0 ? (
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12">
+							{activities.map((activity, idx) => (
+								<ActivityCard
+									key={activity.id}
+									activity={activity}
+									index={idx}
+								/>
+							))}
+						</div>
+					) : (
+						<motion.div
+							initial={{ opacity: 0 }}
+							animate={{ opacity: 1 }}
+							className="min-h-[40vh] flex flex-col items-center justify-center p-12 bg-muted/20 border border-border/50 rounded-3xl backdrop-blur-sm">
+							<div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-6">
+								<Compass className="w-8 h-8 text-muted-foreground/30 animate-pulse" />
+							</div>
+							<p className="text-muted-foreground/60 font-medium text-lg italic">
+								Our team is currently scouting new adventures.
+								Stay tuned.
+							</p>
+						</motion.div>
+					)}
+				</div>
+			</section>
+		</main>
+	);
 }

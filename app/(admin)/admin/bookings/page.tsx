@@ -1,18 +1,12 @@
-import type { Metadata } from "next";
+import { Metadata } from "next";
+import { AdminBookingsPage } from "@/components/admin/admin-bookings-page";
 
 export const metadata: Metadata = {
-  title: "Admin · Bookings",
-  description: "Admin bookings management.",
+	title: "Bookings Admin | Unseen Nepal",
+	description: "Track negotiations and finalized bookings.",
+	robots: { index: false, follow: false },
 };
 
-export default function AdminPage() {
-  return (
-    <section className="p-6">
-      <h1 className="text-2xl font-bold">Bookings</h1>
-      <p className="mt-2 text-muted-foreground">
-        Bookings management lands in a follow-up PR. CRUD RPCs already exist in{" "}
-        <code>AdminService</code>.
-      </p>
-    </section>
-  );
+export default function Page() {
+	return <AdminBookingsPage />;
 }

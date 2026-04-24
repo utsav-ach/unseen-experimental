@@ -1,18 +1,12 @@
-import type { Metadata } from "next";
+import { Metadata } from "next";
+import { AdminPhotosPage } from "@/components/admin/admin-photos-page";
 
 export const metadata: Metadata = {
-  title: "Admin · Photos",
-  description: "Admin photos management.",
+	title: "Photos Moderation | Unseen Nepal",
+	description: "Moderate public gallery posts from admin panel.",
+	robots: { index: false, follow: false },
 };
 
-export default function AdminPage() {
-  return (
-    <section className="p-6">
-      <h1 className="text-2xl font-bold">Photos</h1>
-      <p className="mt-2 text-muted-foreground">
-        Photos management lands in a follow-up PR. CRUD RPCs already exist in{" "}
-        <code>AdminService</code>.
-      </p>
-    </section>
-  );
+export default function Page() {
+	return <AdminPhotosPage />;
 }

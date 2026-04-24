@@ -1,47 +1,112 @@
 import { z } from "zod";
-import { Uuid, Timestamp, NonEmptyString } from "../schemas/field-types";
-import { GeoPoint } from "../schemas/gis-types";
+import { f, fn } from "../schemas";
 
-export const ProfileSchema = z.object({
-  id: Uuid,
-  first_name: z.string().nullable(),
-  middle_name: z.string().nullable(),
-  last_name: z.string().nullable(),
-  username: NonEmptyString,
-  phone_number: z.string().nullable(),
-  emergency_contact: z.string().nullable(),
-  avatar_url: z.string().nullable(),
-  is_admin: z.boolean(),
-  is_guide: z.boolean(),
-  is_guide_applicantion_pending: z.boolean(),
-  is_onboarding_complete: z.boolean(),
-  home_location: GeoPoint.nullable(),
-  home_location_name: z.string().nullable(),
-  created_at: Timestamp,
-  updated_at: Timestamp,
-});
-export type Profile = z.infer<typeof ProfileSchema>;
+/**
+ * THis is the profile model which backend uses
+ * but this is incomplete and only references pfofile releted data.
+ *
+ * Not recommended to use in the stores at all.
+ *
+ * Use full profile Schema from below with more fields too
+ *
+ * But for other profiles like in profile cards use this instead as it dont expose sensitive data like email and phone number and many others
+ */
+export const BaseProfileSchema = z.object({
+	id: f.uuid(),
 
-export const MinimalUserSchema = z.object({
-  id: Uuid,
-  username: NonEmptyString,
-  first_name: z.string().nullable(),
-  last_name: z.string().nullable(),
-  avatar_url: z.string().nullable(),
-});
-export type MinimalUser = z.infer<typeof MinimalUserSchema>;
+	first_name: f.name(),
+	middle_name: fn.name(),
+	last_name: f.name(),
 
-export const CompleteOnboardingInputSchema = z.object({
-  first_name: NonEmptyString,
-  middle_name: z.string().nullable().optional(),
-  last_name: NonEmptyString,
-  username: NonEmptyString,
-  phone_number: z.string().nullable().optional(),
-  emergency_contact: z.string().nullable().optional(),
-  avatar_url: z.string().nullable().optional(),
-  home_location: GeoPoint.nullable().optional(),
-  home_location_name: z.string().nullable().optional(),
+	username: f.username(),
+
+	phone_number: f.phone(),
+	emergency_contact: fn.phone(),
+
+	avatar_url: fn.url(),
+
+	is_admin: f.bool(),
+	is_guide: f.bool(),
+	is_guide_applicantion_pending: f.bool(),
+
+	home_location: f.gis(), // → { lat, lng }
+	home_location_name: f.name(),
+
+	created_at: f.datetime(),
+	updated_at: f.datetime(),
 });
-export type CompleteOnboardingInput = z.infer<
-  typeof CompleteOnboardingInputSchema
->;
+
+export type BaseProfile = z.infer<typeof BaseProfileSchema>;
+
+/**
+ * THis is the result we get frm fetch_profile rpc and it is the one that should be used in the auth store
+ * as it contains auth releted data too, which is crucial to dternine the role and what routes to open
+ */
+export const AuthProfileSchema = z.object({
+	profile: BaseProfileSchema.nullable(),
+
+	email: fn.email(),
+
+	is_onboarding_done: f.bool(),
+	is_auth_verified: f.bool(),
+});
+
+/// an alias for auth profile
+/// this is internal and should be kept private to auth store only
+export type AuthProfile = z.infer<typeof AuthProfileSchema>;
+
+/**
+ * THis is the exact schema for ui and cards,
+ * this contains just enough data to show in the card and nothing more so it is best for ui
+ *
+ * Dont use other schemas for direct ui and cards
+ *
+ */
+export const UserInfoSchema = z.object({
+	id: f.uuid(),
+	full_name: f.name(),
+	username: fn.username(),
+	avatar_url: fn.url(),
+	is_guide: f.bool().default(false),
+});
+
+export type UserInfo = z.infer<typeof UserInfoSchema>;
+
+/**
+ * The following is the paramater schema for the onbording completion rpc,
+ * this contains all the data rpc needs and their types
+ *
+ * Make sure to validate the formdata against this before sending to the rpc.
+ */
+export const OnboardingParamSchema = z.object({
+	p_first_name: f.name(),
+	p_middle_name: fn.name(),
+	p_last_name: fn.name(),
+
+	p_username: f.username(),
+
+	p_phone_number: f.phone(),
+	p_emergency_contact: fn.phone(),
+
+	p_avatar_url: fn.url(),
+
+	p_home_location: f.gisInput(), // Note we use input because it is meant to be sent as param and come from formdata/ ui
+	p_home_location_name: f.name(),
+});
+
+export type OnboardingParam = z.infer<typeof OnboardingParamSchema>;
+
+/**
+ * Onbording result is same as AuthProfile  because after onbording user is basically updating their profile,
+ * this also saves us from re fetching again.
+ */
+
+export const LoginSchema = z.object({
+	email: f.email(),
+	password: f.password(),
+});
+
+export const SignupSchema = LoginSchema; // for now both are exactly same
+
+export type LoginParams = z.infer<typeof LoginSchema>;
+export type SignupParams = z.infer<typeof SignupSchema>;
